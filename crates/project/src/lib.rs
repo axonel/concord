@@ -9,14 +9,14 @@ pub mod python;
 pub mod rust;
 pub mod tool_versions;
 
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
 use concord_core::error::Result;
 use concord_core::evidence::Evidence;
 use concord_core::ir::{ProjectComponent, ProjectManifest, ProjectRequirement, RequirementKind};
 use concord_core::Confidence;
 pub use concord_core::VersionConstraint;
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum EntityKey {
