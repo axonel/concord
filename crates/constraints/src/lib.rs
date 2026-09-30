@@ -15,14 +15,14 @@ pub use version::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::path::PathBuf;
     use concord_core::evidence::{Evidence, EvidenceSource};
     use concord_core::ir::{
         MachineCapability, PortInfo, PortState, ProjectRequirement, RequirementKind, Runtime,
         Service, ServiceStatus,
     };
     use concord_core::Confidence;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     fn mock_machine() -> MachineCapability {
         MachineCapability {

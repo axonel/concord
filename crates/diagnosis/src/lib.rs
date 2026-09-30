@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
 use concord_constraints::model::Constraint;
 use concord_core::evidence::Evidence;
 use concord_core::Confidence;
 use concord_graph::model::CausalTrace;
 use concord_predictor::Prediction;
+use serde::{Deserialize, Serialize};
 
 /// Structured root-cause diagnosis explaining why an environment failure will occur.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

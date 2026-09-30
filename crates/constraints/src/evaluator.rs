@@ -1,12 +1,12 @@
 use crate::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use crate::version::matches_version_constraint;
-use std::path::PathBuf;
-use std::process::Command;
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{
     MachineCapability, ProjectRequirement, RequirementKind, ServiceStatus, ToolKind, ToolScope,
 };
 use concord_core::{Confidence, VersionConstraint};
+use std::path::PathBuf;
+use std::process::Command;
 
 /// Convert a ProjectRequirement into a Constraint.
 pub fn requirement_to_constraint(req: &ProjectRequirement) -> Option<Constraint> {

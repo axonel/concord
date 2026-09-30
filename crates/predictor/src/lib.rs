@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
 use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use concord_core::evidence::Evidence;
 use concord_core::ir::{EnvironmentModel, ToolScope};
 use concord_core::Confidence;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -659,9 +659,9 @@ pub fn predict_failures(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use concord_core::ir::{MachineCapability, ProjectManifest};
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use concord_core::ir::{MachineCapability, ProjectManifest};
 
     #[test]
     fn test_predict_runtime_failure() {
