@@ -7,14 +7,14 @@ pub use model::{CausalTrace, EdgeData, NodeData};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::path::PathBuf;
     use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
     use concord_core::evidence::Evidence;
     use concord_core::ir::{
         EnvironmentModel, MachineCapability, ProjectManifest, ProjectRequirement, RequirementKind,
         Runtime,
     };
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     #[test]
     fn test_graph_build_and_causal_trace() {

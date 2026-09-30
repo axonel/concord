@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use concord_constraints::model::{Constraint, EvaluatedConstraint};
 use concord_core::evidence::Evidence;
 use concord_core::ir::EnvironmentModel;
+use serde::{Deserialize, Serialize};
 
 /// An individual verification check result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,7 +106,8 @@ pub fn verify_environment(
             &eval.status
         {
             reason.clone()
-        } else if let concord_constraints::model::ConstraintStatus::Unknown { reason } = &eval.status
+        } else if let concord_constraints::model::ConstraintStatus::Unknown { reason } =
+            &eval.status
         {
             format!("Status unknown: {}", reason)
         } else {
@@ -142,10 +143,10 @@ pub fn verify_environment(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::path::PathBuf;
     use concord_constraints::model::{Constraint, ConstraintStatus};
     use concord_core::ir::{MachineCapability, ProjectManifest};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     #[test]
     fn test_verify_environment_pass_and_fail() {
