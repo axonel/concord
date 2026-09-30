@@ -2,8 +2,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
-use unfuck_core::evidence::{Evidence, EvidenceSource};
-use unfuck_core::Confidence;
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::Confidence;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TcpProbeResult {
