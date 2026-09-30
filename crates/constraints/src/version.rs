@@ -95,7 +95,7 @@ pub fn parse_version_req(constraint: &str) -> Option<VersionReq> {
     VersionReq::parse(&combined).ok()
 }
 
-pub use unfuck_core::version::*;
+pub use concord_core::version::*;
 
 /// Check if actual version satisfies constraint requirement.
 pub fn matches_version_constraint(actual: &str, constraint: &str) -> bool {

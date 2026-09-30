@@ -2,11 +2,11 @@ use crate::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use crate::version::matches_version_constraint;
 use std::path::PathBuf;
 use std::process::Command;
-use unfuck_core::evidence::{Evidence, EvidenceSource};
-use unfuck_core::ir::{
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::ir::{
     MachineCapability, ProjectRequirement, RequirementKind, ServiceStatus, ToolKind, ToolScope,
 };
-use unfuck_core::{Confidence, VersionConstraint};
+use concord_core::{Confidence, VersionConstraint};
 
 /// Convert a ProjectRequirement into a Constraint.
 pub fn requirement_to_constraint(req: &ProjectRequirement) -> Option<Constraint> {
@@ -1414,7 +1414,7 @@ pub fn evaluate_constraint(
 /// Convert a ProjectRequirement into a Constraint with optional project manifest context.
 pub fn requirement_to_constraint_with_project(
     req: &ProjectRequirement,
-    project: Option<&unfuck_core::ir::ProjectManifest>,
+    project: Option<&concord_core::ir::ProjectManifest>,
     machine: &MachineCapability,
 ) -> Option<Constraint> {
     if let Some(ref plat) = req.platform {
@@ -1509,7 +1509,7 @@ pub fn requirement_to_constraint_with_project(
 
 /// Evaluates all project requirements against machine capabilities with project manifest context.
 pub fn evaluate_project(
-    project: &unfuck_core::ir::ProjectManifest,
+    project: &concord_core::ir::ProjectManifest,
     machine: &MachineCapability,
 ) -> Vec<EvaluatedConstraint> {
     let mut results = Vec::new();
@@ -1589,7 +1589,7 @@ pub fn evaluate_all(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unfuck_core::ir::{Runtime, ToolObservation};
+    use concord_core::ir::{Runtime, ToolObservation};
 
     #[test]
     fn test_anyof_satisfied_when_one_alternative_satisfied() {

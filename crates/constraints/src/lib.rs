@@ -17,12 +17,12 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use unfuck_core::evidence::{Evidence, EvidenceSource};
-    use unfuck_core::ir::{
+    use concord_core::evidence::{Evidence, EvidenceSource};
+    use concord_core::ir::{
         MachineCapability, PortInfo, PortState, ProjectRequirement, RequirementKind, Runtime,
         Service, ServiceStatus,
     };
-    use unfuck_core::Confidence;
+    use concord_core::Confidence;
 
     fn mock_machine() -> MachineCapability {
         MachineCapability {
@@ -84,7 +84,7 @@ mod tests {
                     "Port 3000 in use",
                 ),
             }],
-            package_managers: vec![unfuck_core::ir::PackageManagerObservation {
+            package_managers: vec![concord_core::ir::PackageManagerObservation {
                 name: "pnpm".to_string(),
                 version: Some("11.24.0".to_string()),
                 executable_path: PathBuf::from("/usr/bin/pnpm"),
@@ -94,9 +94,9 @@ mod tests {
                     "pnpm --version",
                 ),
             }],
-            tools: vec![unfuck_core::ir::ToolObservation {
+            tools: vec![concord_core::ir::ToolObservation {
                 name: "make".to_string(),
-                kind: unfuck_core::ir::ToolKind::BuildTool,
+                kind: concord_core::ir::ToolKind::BuildTool,
                 version: Some("4.4.1".to_string()),
                 executable_path: PathBuf::from("/usr/bin/make"),
                 evidence: Evidence::from_executable(
@@ -171,17 +171,17 @@ mod tests {
         let machine = mock_machine();
         let build_tool = Constraint::ToolAvailable {
             name: "make".to_string(),
-            kind: unfuck_core::ir::ToolKind::BuildTool,
+            kind: concord_core::ir::ToolKind::BuildTool,
             constraint: None,
-            scope: unfuck_core::ir::ToolScope::RequiredForBuild,
+            scope: concord_core::ir::ToolScope::RequiredForBuild,
         };
         assert!(evaluate_constraint(&build_tool, &machine, None).is_satisfied());
 
         let missing_dev_tool = Constraint::ToolAvailable {
             name: "terragrunt".to_string(),
-            kind: unfuck_core::ir::ToolKind::DeveloperTool,
+            kind: concord_core::ir::ToolKind::DeveloperTool,
             constraint: Some(VersionConstraint::parse("1.1.1")),
-            scope: unfuck_core::ir::ToolScope::RequiredForTask,
+            scope: concord_core::ir::ToolScope::RequiredForTask,
         };
         let eval = evaluate_constraint(&missing_dev_tool, &machine, None);
         assert!(eval.is_violated());
