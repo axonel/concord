@@ -282,11 +282,16 @@ fn test_fixture_adversarial_benchmarks() {
     let mut tested_count = 0;
     for repo_name in supported_repos {
         let repo_path = fixtures_root.join(repo_name);
-        assert!(repo_path.is_dir(), "missing benchmark fixture: {}", repo_path.display());
+        assert!(
+            repo_path.is_dir(),
+            "missing benchmark fixture: {}",
+            repo_path.display()
+        );
 
         tested_count += 1;
-        let output = execute_pipeline(&repo_path)
-            .unwrap_or_else(|e| panic!("execute_pipeline failed on {}: {}", repo_path.display(), e));
+        let output = execute_pipeline(&repo_path).unwrap_or_else(|e| {
+            panic!("execute_pipeline failed on {}: {}", repo_path.display(), e)
+        });
 
         let report = ConcordReport {
             project: output.env_model.project,
@@ -298,10 +303,20 @@ fn test_fixture_adversarial_benchmarks() {
         };
 
         // Assert JSON serializability and schema invariants
-        let json_str = serde_json::to_string(&report)
-            .unwrap_or_else(|e| panic!("failed to serialize JSON for {}: {}", repo_path.display(), e));
-        let json_val: serde_json::Value = serde_json::from_str(&json_str)
-            .unwrap_or_else(|e| panic!("failed to deserialize JSON for {}: {}", repo_path.display(), e));
+        let json_str = serde_json::to_string(&report).unwrap_or_else(|e| {
+            panic!(
+                "failed to serialize JSON for {}: {}",
+                repo_path.display(),
+                e
+            )
+        });
+        let json_val: serde_json::Value = serde_json::from_str(&json_str).unwrap_or_else(|e| {
+            panic!(
+                "failed to deserialize JSON for {}: {}",
+                repo_path.display(),
+                e
+            )
+        });
 
         assert_json_contract_validity(&json_val);
         assert!(

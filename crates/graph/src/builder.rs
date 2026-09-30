@@ -1,11 +1,11 @@
 use crate::model::{CausalTrace, EdgeData, NodeData};
+use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
+use concord_core::evidence::Evidence;
+use concord_core::ir::EnvironmentModel;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use std::collections::HashMap;
-use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
-use concord_core::evidence::Evidence;
-use concord_core::ir::EnvironmentModel;
 
 /// The environment graph connecting Project, Components, Requirements, Machine capabilities, Constraints, and Evidence.
 #[derive(Debug, Clone)]
