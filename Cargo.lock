@@ -552,7 +552,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
-name = "unfuck"
+name = "concord"
 version = "0.2.1"
 dependencies = [
  "clap",
@@ -560,18 +560,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "unfuck-constraints",
- "unfuck-core",
- "unfuck-diagnosis",
- "unfuck-graph",
- "unfuck-predictor",
- "unfuck-project",
- "unfuck-scanner",
- "unfuck-verifier",
+ "concord-constraints",
+ "concord-core",
+ "concord-diagnosis",
+ "concord-graph",
+ "concord-predictor",
+ "concord-project",
+ "concord-scanner",
+ "concord-verifier",
 ]
 
 [[package]]
-name = "unfuck-constraints"
+name = "concord-constraints"
 version = "0.2.1"
 dependencies = [
  "semver",
@@ -579,11 +579,11 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
- "unfuck-core",
+ "concord-core",
 ]
 
 [[package]]
-name = "unfuck-core"
+name = "concord-core"
 version = "0.2.1"
 dependencies = [
  "semver",
@@ -593,44 +593,44 @@ dependencies = [
 ]
 
 [[package]]
-name = "unfuck-diagnosis"
+name = "concord-diagnosis"
 version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "unfuck-constraints",
- "unfuck-core",
- "unfuck-graph",
- "unfuck-predictor",
+ "concord-constraints",
+ "concord-core",
+ "concord-graph",
+ "concord-predictor",
 ]
 
 [[package]]
-name = "unfuck-graph"
+name = "concord-graph"
 version = "0.2.1"
 dependencies = [
  "petgraph",
  "serde",
  "serde_json",
  "thiserror",
- "unfuck-constraints",
- "unfuck-core",
+ "concord-constraints",
+ "concord-core",
 ]
 
 [[package]]
-name = "unfuck-predictor"
+name = "concord-predictor"
 version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "unfuck-constraints",
- "unfuck-core",
- "unfuck-graph",
+ "concord-constraints",
+ "concord-core",
+ "concord-graph",
 ]
 
 [[package]]
-name = "unfuck-project"
+name = "concord-project"
 version = "0.2.1"
 dependencies = [
  "semver",
@@ -639,31 +639,31 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "toml",
- "unfuck-core",
+ "concord-core",
  "walkdir",
 ]
 
 [[package]]
-name = "unfuck-scanner"
+name = "concord-scanner"
 version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
  "sysinfo",
- "unfuck-core",
+ "concord-core",
 ]
 
 [[package]]
-name = "unfuck-verifier"
+name = "concord-verifier"
 version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "unfuck-constraints",
- "unfuck-core",
- "unfuck-project",
- "unfuck-scanner",
+ "concord-constraints",
+ "concord-core",
+ "concord-project",
+ "concord-scanner",
 ]
 
 [[package]]

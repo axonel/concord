@@ -1,5 +1,5 @@
 [package]
-name = "unfuck-verifier"
+name = "concord-verifier"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,10 +7,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-unfuck-core = { path = "../core" }
-unfuck-constraints = { path = "../constraints" }
-unfuck-scanner = { path = "../scanner" }
-unfuck-project = { path = "../project" }
+concord-core = { path = "../core" }
+concord-constraints = { path = "../constraints" }
+concord-scanner = { path = "../scanner" }
+concord-project = { path = "../project" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
