@@ -554,7 +554,9 @@ pub fn analyze_project(root: &Path) -> Result<ProjectManifest> {
         )));
     }
 
-    let root_buf = root.canonicalize().map_err(concord_core::ConcordError::Io)?;
+    let root_buf = root
+        .canonicalize()
+        .map_err(concord_core::ConcordError::Io)?;
 
     // 1. Analyze root directory
     let root_analysis = analyze_dir(&root_buf);

@@ -1,12 +1,12 @@
-use std::cmp::Ordering;
-use std::fs;
-use std::path::{Path, PathBuf};
-use toml::Value;
 use concord_core::evidence::Evidence;
 use concord_core::ir::{ProjectRequirement, RequirementKind};
 use concord_core::version::{compare_version_components, parse_version_components};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
+use std::cmp::Ordering;
+use std::fs;
+use std::path::{Path, PathBuf};
+use toml::Value;
 
 pub struct RustDiscovery {
     pub is_rust: bool,

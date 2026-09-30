@@ -1,10 +1,10 @@
-use serde_json::Value;
-use std::fs;
-use std::path::{Path, PathBuf};
 use concord_core::evidence::Evidence;
 use concord_core::ir::{ProjectRequirement, RequirementKind};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
+use serde_json::Value;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct NodeDiscovery {
     pub is_node: bool,

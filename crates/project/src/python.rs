@@ -1,10 +1,10 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use toml::Value;
 use concord_core::evidence::Evidence;
 use concord_core::ir::{ProjectRequirement, RequirementKind};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
+use std::fs;
+use std::path::{Path, PathBuf};
+use toml::Value;
 
 pub struct PythonDiscovery {
     pub is_python: bool,
