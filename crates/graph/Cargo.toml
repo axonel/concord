@@ -1,5 +1,5 @@
 [package]
-name = "unfuck-graph"
+name = "concord-graph"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-unfuck-core = { path = "../core" }
-unfuck-constraints = { path = "../constraints" }
+concord-core = { path = "../core" }
+concord-constraints = { path = "../constraints" }
 petgraph = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

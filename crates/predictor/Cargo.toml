@@ -1,5 +1,5 @@
 [package]
-name = "unfuck-predictor"
+name = "concord-predictor"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,9 +7,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-unfuck-core = { path = "../core" }
-unfuck-constraints = { path = "../constraints" }
-unfuck-graph = { path = "../graph" }
+concord-core = { path = "../core" }
+concord-constraints = { path = "../constraints" }
+concord-graph = { path = "../graph" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -1,18 +1,18 @@
 use clap::{Parser, Subcommand};
+use concord::format;
+use concord::{execute_pipeline, ConcordReport};
+use concord_diagnosis::Diagnosis;
+use concord_project::analyze_project;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use unfuck::format;
-use unfuck::{execute_pipeline, UnfuckReport};
-use unfuck_diagnosis::Diagnosis;
-use unfuck_project::analyze_project;
 
 #[derive(Parser)]
 #[command(
-    name = "unfuck",
+    name = "concord",
     author = "Axonel Team",
     version,
     about = "Development-environment resolution engine",
-    long_about = "UNFUCK models development environments as constraint systems, predicting failures before they happen and explaining root causes with structured evidence."
+    long_about = "CONCORD models development environments as constraint systems, predicting failures before they happen and explaining root causes with structured evidence."
 )]
 pub struct Cli {
     /// Path to target project repository
@@ -79,7 +79,7 @@ fn main() -> ExitCode {
     match &cli.command {
         Some(Commands::Scan { path }) => match analyze_project(path) {
             Ok(proj) => {
-                let mach = unfuck_scanner::scan_machine_for_project(Some(path));
+                let mach = concord_scanner::scan_machine_for_project(Some(path));
                 if cli.json {
                     let scan_json = serde_json::json!({
                         "project": proj,
@@ -202,12 +202,12 @@ fn main() -> ExitCode {
         },
 
         None => {
-            // Default command: unfuck [PATH]
+            // Default command: concord [PATH]
             match execute_pipeline(&cli.path) {
                 Ok(out) => {
                     let has_failures = !out.predictions.is_empty();
                     if cli.json {
-                        let report = UnfuckReport {
+                        let report = ConcordReport {
                             project: out.env_model.project,
                             machine: out.env_model.machine,
                             evaluated_constraints: out.evaluated_constraints,

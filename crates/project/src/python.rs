@@ -1,10 +1,10 @@
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ProjectRequirement, RequirementKind};
+use concord_core::Confidence;
+use concord_core::VersionConstraint;
 use std::fs;
 use std::path::{Path, PathBuf};
 use toml::Value;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ProjectRequirement, RequirementKind};
-use unfuck_core::Confidence;
-use unfuck_core::VersionConstraint;
 
 pub struct PythonDiscovery {
     pub is_python: bool,
@@ -141,7 +141,7 @@ pub fn analyze_python(root: &Path) -> PythonDiscovery {
                     // Baseline Python requirement if no specific version constraint declared
                     if !has_py_req && requirements.iter().all(|r| r.name != "python") {
                         let ev = Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                            concord_core::evidence::EvidenceSource::RepositoryFile {
                                 path: PathBuf::from("pyproject.toml"),
                                 line: None,
                                 detail: Some("pyproject.toml present".to_string()),
@@ -258,7 +258,7 @@ pub fn analyze_python(root: &Path) -> PythonDiscovery {
                 }
                 Err(e) => {
                     evidence.push(Evidence::new(
-                        unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                        concord_core::evidence::EvidenceSource::RepositoryFile {
                             path: PathBuf::from("pyproject.toml"),
                             line: None,
                             detail: Some(e.to_string()),
@@ -270,7 +270,7 @@ pub fn analyze_python(root: &Path) -> PythonDiscovery {
             },
             Err(e) => {
                 evidence.push(Evidence::new(
-                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                    concord_core::evidence::EvidenceSource::RepositoryFile {
                         path: PathBuf::from("pyproject.toml"),
                         line: None,
                         detail: Some(e.to_string()),
@@ -340,7 +340,7 @@ pub fn analyze_python(root: &Path) -> PythonDiscovery {
 
             if requirements.iter().all(|r| r.name != "python") {
                 let ev = Evidence::new(
-                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                    concord_core::evidence::EvidenceSource::RepositoryFile {
                         path: PathBuf::from("requirements.txt"),
                         line: None,
                         detail: Some("requirements.txt present".to_string()),

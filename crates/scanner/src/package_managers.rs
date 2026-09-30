@@ -1,8 +1,8 @@
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::ir::PackageManagerObservation;
+use concord_core::Confidence;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use unfuck_core::evidence::{Evidence, EvidenceSource};
-use unfuck_core::ir::PackageManagerObservation;
-use unfuck_core::Confidence;
 
 struct PackageManagerProbe {
     name: &'static str,

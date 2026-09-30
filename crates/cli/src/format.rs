@@ -1,20 +1,20 @@
 use colored::*;
-use unfuck_constraints::model::EvaluatedConstraint;
-use unfuck_core::Confidence;
-use unfuck_diagnosis::Diagnosis;
-use unfuck_predictor::Prediction;
-use unfuck_verifier::VerificationReport;
+use concord_constraints::model::EvaluatedConstraint;
+use concord_core::Confidence;
+use concord_diagnosis::Diagnosis;
+use concord_predictor::Prediction;
+use concord_verifier::VerificationReport;
 
 pub fn print_banner() {
     println!(
         "{}",
-        "UNFUCK — Development Environment Engine".bold().cyan()
+        "CONCORD — Development Environment Engine".bold().cyan()
     );
     println!("{}", "──────────────────────────────────────────".dimmed());
 }
 
 pub fn print_human_summary(
-    project: &unfuck_core::ir::ProjectManifest,
+    project: &concord_core::ir::ProjectManifest,
     project_path: &str,
     predictions: &[Prediction],
     evaluated_constraints: &[EvaluatedConstraint],
@@ -33,9 +33,9 @@ pub fn print_human_summary(
         .requirements
         .iter()
         .filter_map(|r| match &r.kind {
-            unfuck_core::ir::RequirementKind::DeveloperTool { name, .. }
-            | unfuck_core::ir::RequirementKind::BuildTool { name, .. }
-            | unfuck_core::ir::RequirementKind::CodeGenerator { name, .. } => Some(name.as_str()),
+            concord_core::ir::RequirementKind::DeveloperTool { name, .. }
+            | concord_core::ir::RequirementKind::BuildTool { name, .. }
+            | concord_core::ir::RequirementKind::CodeGenerator { name, .. } => Some(name.as_str()),
             _ => None,
         })
         .collect();
@@ -65,7 +65,7 @@ pub fn print_human_summary(
         let required_cnt = project
             .env_var_specs
             .iter()
-            .filter(|s| matches!(s.category, unfuck_core::ir::EnvVarCategory::Required))
+            .filter(|s| matches!(s.category, concord_core::ir::EnvVarCategory::Required))
             .count();
         let optional_cnt = project
             .env_var_specs
@@ -73,14 +73,19 @@ pub fn print_human_summary(
             .filter(|s| {
                 matches!(
                     s.category,
-                    unfuck_core::ir::EnvVarCategory::OptionalWithDefault
+                    concord_core::ir::EnvVarCategory::OptionalWithDefault
                 )
             })
             .count();
         let local_cnt = project
             .env_var_specs
             .iter()
-            .filter(|s| matches!(s.category, unfuck_core::ir::EnvVarCategory::ConfiguredLocal))
+            .filter(|s| {
+                matches!(
+                    s.category,
+                    concord_core::ir::EnvVarCategory::ConfiguredLocal
+                )
+            })
             .count();
 
         let mut parts = Vec::new();
@@ -164,8 +169,8 @@ pub fn print_human_summary(
 
         println!();
         println!("{}", "Next steps:".bold());
-        println!("  unfuck explain     Inspect root causes and causal dependency chains");
-        println!("  unfuck verify      Run read-only environment verification checks");
+        println!("  concord explain     Inspect root causes and causal dependency chains");
+        println!("  concord verify      Run read-only environment verification checks");
     }
 }
 

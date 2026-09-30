@@ -1,8 +1,8 @@
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ToolKind, ToolScope};
+use concord_core::version::VersionConstraint;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ToolKind, ToolScope};
-use unfuck_core::version::VersionConstraint;
 
 /// Declarative environment constraint.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -55,7 +55,7 @@ pub enum Constraint {
         missing_env_files: Vec<std::path::PathBuf>,
         unresolved_vars: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        env_templates: Vec<unfuck_core::ir::EnvFileTemplate>,
+        env_templates: Vec<concord_core::ir::EnvFileTemplate>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         bootstrap_suggestions: Vec<String>,
     },

@@ -1,6 +1,6 @@
+use concord_core::ir::BootstrapAction;
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::ir::BootstrapAction;
 
 /// Common bootstrap / setup script files to inspect.
 const BOOTSTRAP_SCRIPTS: &[&str] = &[

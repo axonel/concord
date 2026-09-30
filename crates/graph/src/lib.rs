@@ -7,14 +7,14 @@ pub use model::{CausalTrace, EdgeData, NodeData};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-    use unfuck_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
-    use unfuck_core::evidence::Evidence;
-    use unfuck_core::ir::{
+    use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
+    use concord_core::evidence::Evidence;
+    use concord_core::ir::{
         EnvironmentModel, MachineCapability, ProjectManifest, ProjectRequirement, RequirementKind,
         Runtime,
     };
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     #[test]
     fn test_graph_build_and_causal_trace() {
@@ -27,7 +27,7 @@ mod tests {
                 "python".to_string(),
                 RequirementKind::Runtime {
                     name: "python".to_string(),
-                    constraint: unfuck_core::version::VersionConstraint::GreaterEqual(
+                    constraint: concord_core::version::VersionConstraint::GreaterEqual(
                         "3.11".to_string(),
                     ),
                 },
@@ -79,7 +79,7 @@ mod tests {
         let eval = EvaluatedConstraint {
             constraint: Constraint::RuntimeVersion {
                 runtime: "python".to_string(),
-                constraint: unfuck_core::VersionConstraint::GreaterEqual("3.11".to_string()),
+                constraint: concord_core::VersionConstraint::GreaterEqual("3.11".to_string()),
             },
             status: ConstraintStatus::Violated {
                 reason: "Runtime 'python' version 3.10.12 does not satisfy requirement >= 3.11"

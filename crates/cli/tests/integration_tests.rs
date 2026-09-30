@@ -1,13 +1,13 @@
+use concord_constraints::evaluator::evaluate_all;
+use concord_core::ir::{EnvironmentModel, PortInfo, PortState};
+use concord_core::Confidence;
+use concord_diagnosis::diagnose_all;
+use concord_graph::EnvironmentGraph;
+use concord_predictor::{predict_failures, PredictionCategory};
+use concord_project::analyze_project;
+use concord_scanner::scan_machine;
+use concord_verifier::verify_environment;
 use std::path::PathBuf;
-use unfuck_constraints::evaluator::evaluate_all;
-use unfuck_core::ir::{EnvironmentModel, PortInfo, PortState};
-use unfuck_core::Confidence;
-use unfuck_diagnosis::diagnose_all;
-use unfuck_graph::EnvironmentGraph;
-use unfuck_predictor::{predict_failures, PredictionCategory};
-use unfuck_project::analyze_project;
-use unfuck_scanner::scan_machine;
-use unfuck_verifier::verify_environment;
 
 fn fixtures_dir() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -131,8 +131,8 @@ fn test_port_collision_prediction() {
             pid: Some(1337),
             process_name: Some("rogue-web".to_string()),
         },
-        evidence: unfuck_core::evidence::Evidence::new(
-            unfuck_core::evidence::EvidenceSource::ProcessInspection {
+        evidence: concord_core::evidence::Evidence::new(
+            concord_core::evidence::EvidenceSource::ProcessInspection {
                 pid: 1337,
                 name: "rogue-web".to_string(),
                 cmdline: None,
@@ -186,7 +186,7 @@ fn test_json_serialization_roundtrip() {
     let diagnoses = diagnose_all(&predictions, &traces);
     let verification = verify_environment(&env_model, &evaluated_constraints);
 
-    let report = unfuck::UnfuckReport {
+    let report = concord::ConcordReport {
         project: manifest,
         machine,
         evaluated_constraints,
@@ -276,11 +276,11 @@ fn test_fixture_mise_pinned_tools() {
     );
     let pnpm_req = pnpm_reqs[0];
     match &pnpm_req.kind {
-        unfuck_core::ir::RequirementKind::PackageManager { name, constraint } => {
+        concord_core::ir::RequirementKind::PackageManager { name, constraint } => {
             assert_eq!(name, "pnpm");
             assert_eq!(
                 constraint,
-                &Some(unfuck_core::version::VersionConstraint::Exact(
+                &Some(concord_core::version::VersionConstraint::Exact(
                     "11.24.0".to_string()
                 ))
             );
@@ -299,11 +299,11 @@ fn test_fixture_mise_pinned_tools() {
         .find(|r| r.name == "java")
         .expect("java requirement");
     match &java_req.kind {
-        unfuck_core::ir::RequirementKind::Runtime { name, constraint } => {
+        concord_core::ir::RequirementKind::Runtime { name, constraint } => {
             assert_eq!(name, "java");
             assert_eq!(
                 constraint,
-                &unfuck_core::version::VersionConstraint::Exact("21.0.2".to_string())
+                &concord_core::version::VersionConstraint::Exact("21.0.2".to_string())
             );
         }
         other => panic!("Expected Runtime kind for java, found {:?}", other),
@@ -317,8 +317,8 @@ fn test_fixture_mise_pinned_tools() {
         .expect("terragrunt");
     assert!(matches!(
         &terragrunt.kind,
-        unfuck_core::ir::RequirementKind::DeveloperTool {
-            scope: unfuck_core::ir::ToolScope::RequiredForTask,
+        concord_core::ir::RequirementKind::DeveloperTool {
+            scope: concord_core::ir::ToolScope::RequiredForTask,
             ..
         }
     ));
@@ -330,8 +330,8 @@ fn test_fixture_mise_pinned_tools() {
         .expect("opentofu");
     assert!(matches!(
         &opentofu.kind,
-        unfuck_core::ir::RequirementKind::DeveloperTool {
-            scope: unfuck_core::ir::ToolScope::RequiredForTask,
+        concord_core::ir::RequirementKind::DeveloperTool {
+            scope: concord_core::ir::ToolScope::RequiredForTask,
             ..
         }
     ));
@@ -343,8 +343,8 @@ fn test_fixture_mise_pinned_tools() {
         .expect("openapi-generator-cli");
     assert!(matches!(
         &openapi.kind,
-        unfuck_core::ir::RequirementKind::CodeGenerator {
-            scope: unfuck_core::ir::ToolScope::RequiredForTask,
+        concord_core::ir::RequirementKind::CodeGenerator {
+            scope: concord_core::ir::ToolScope::RequiredForTask,
             ..
         }
     ));
@@ -356,7 +356,7 @@ fn test_fixture_mise_pinned_tools() {
         .expect("oazapfts");
     assert!(matches!(
         &oazapfts.kind,
-        unfuck_core::ir::RequirementKind::CodeGenerator { .. }
+        concord_core::ir::RequirementKind::CodeGenerator { .. }
     ));
 
     let extism = manifest
@@ -366,11 +366,11 @@ fn test_fixture_mise_pinned_tools() {
         .expect("extism");
     assert!(matches!(
         &extism.kind,
-        unfuck_core::ir::RequirementKind::DeveloperTool { .. }
+        concord_core::ir::RequirementKind::DeveloperTool { .. }
     ));
 
     // Evaluate predictions against empty machine
-    let machine = unfuck_core::ir::MachineCapability {
+    let machine = concord_core::ir::MachineCapability {
         os: "Linux".to_string(),
         os_family: "linux".to_string(),
         arch: "x86_64".to_string(),
@@ -413,25 +413,25 @@ fn test_fixture_exact_runtime_pin() {
         .expect("java");
     assert_eq!(
         java_req.kind,
-        unfuck_core::ir::RequirementKind::Runtime {
+        concord_core::ir::RequirementKind::Runtime {
             name: "java".to_string(),
-            constraint: unfuck_core::version::VersionConstraint::Exact("21.0.2".to_string()),
+            constraint: concord_core::version::VersionConstraint::Exact("21.0.2".to_string()),
         }
     );
 
     // Simulate Fedora / RHEL machine with Java 26.0.2.1 installed
-    let machine = unfuck_core::ir::MachineCapability {
+    let machine = concord_core::ir::MachineCapability {
         os: "Linux".to_string(),
         os_family: "linux".to_string(),
         arch: "x86_64".to_string(),
         cpu_count: 8,
         total_memory_bytes: 16 * 1024 * 1024 * 1024,
         available_memory_bytes: 8 * 1024 * 1024 * 1024,
-        runtimes: vec![unfuck_core::ir::Runtime {
+        runtimes: vec![concord_core::ir::Runtime {
             name: "java".to_string(),
             version: "26.0.2.1".to_string(),
             executable_path: PathBuf::from("/usr/bin/java"),
-            evidence: unfuck_core::evidence::Evidence::from_executable(
+            evidence: concord_core::evidence::Evidence::from_executable(
                 PathBuf::from("/usr/bin/java"),
                 "openjdk 26.0.2.1",
                 "java -version",
@@ -474,9 +474,9 @@ fn test_fixture_duplicate_runtime_sources() {
     let node_req = node_reqs[0];
     assert_eq!(
         node_req.kind,
-        unfuck_core::ir::RequirementKind::Runtime {
+        concord_core::ir::RequirementKind::Runtime {
             name: "node".to_string(),
-            constraint: unfuck_core::version::VersionConstraint::Exact("24.21.0".to_string()),
+            constraint: concord_core::version::VersionConstraint::Exact("24.21.0".to_string()),
         }
     );
     assert!(
@@ -492,11 +492,11 @@ fn test_fixture_a_host_postgres_requirement() {
     assert!(manifest.compose_projects.is_empty());
     assert!(manifest.requirements.iter().any(|r| r.name == "postgresql"));
 
-    let machine = unfuck_core::ir::MachineCapability::default();
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_core::ir::MachineCapability::default();
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let pg_eval = evaluated
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::ServiceRunning { service, .. } if service == "postgresql"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ServiceRunning { service, .. } if service == "postgresql"))
         .expect("Host postgresql ServiceRunning constraint");
     assert!(pg_eval.is_violated());
 }
@@ -507,31 +507,31 @@ fn test_fixture_b_compose_postgres_healthy() {
     let manifest = analyze_project(&fixture_path).expect("analyze compose-postgres-healthy");
     assert_eq!(manifest.compose_projects.len(), 1);
 
-    let mut machine = unfuck_core::ir::MachineCapability::default();
+    let mut machine = concord_core::ir::MachineCapability::default();
     machine
         .containers
-        .push(unfuck_core::ir::ContainerObservation {
+        .push(concord_core::ir::ContainerObservation {
             id: "c123".to_string(),
             names: vec!["compose_healthy_postgres".to_string()],
             image: "postgres:16".to_string(),
-            status: unfuck_core::ir::ContainerStatus::Running {
+            status: concord_core::ir::ContainerStatus::Running {
                 healthy: Some(true),
             },
             ports: vec![],
             compose_project: Some("compose_healthy".to_string()),
             compose_service: Some("database".to_string()),
             labels: std::collections::HashMap::new(),
-            evidence: unfuck_core::evidence::Evidence::from_repo_file(
+            evidence: concord_core::evidence::Evidence::from_repo_file(
                 std::path::PathBuf::from("docker-compose.yml"),
                 None,
                 "Healthy test container",
             ),
         });
 
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let pg_eval = evaluated
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::ComposeServiceState { service_name, .. } if service_name == "database"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ComposeServiceState { service_name, .. } if service_name == "database"))
         .expect("ComposeServiceState for database");
     assert!(
         pg_eval.is_satisfied(),
@@ -546,30 +546,30 @@ fn test_fixture_c_compose_missing_env() {
     assert_eq!(manifest.compose_projects.len(), 1);
     assert!(!manifest.compose_projects[0].can_instantiate);
 
-    let machine = unfuck_core::ir::MachineCapability::default();
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_core::ir::MachineCapability::default();
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let config_eval = evaluated
         .iter()
         .find(|e| {
             matches!(
                 &e.constraint,
-                unfuck_constraints::model::Constraint::ComposeConfigUnresolved { .. }
+                concord_constraints::model::Constraint::ComposeConfigUnresolved { .. }
             )
         })
         .expect("ComposeConfigUnresolved constraint");
     assert!(config_eval.is_violated());
 
-    let env_model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let predictions = unfuck_predictor::predict_failures(&env_model, &evaluated);
+    let env_model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let predictions = concord_predictor::predict_failures(&env_model, &evaluated);
     let pred = predictions
         .iter()
-        .find(|p| p.category == unfuck_predictor::PredictionCategory::ComposeConfigMissing)
+        .find(|p| p.category == concord_predictor::PredictionCategory::ComposeConfigMissing)
         .expect("ComposeConfigMissing prediction");
     assert!(pred.summary.contains("docker/.env"));
 
-    let graph = unfuck_graph::EnvironmentGraph::build(&env_model, &evaluated);
+    let graph = concord_graph::EnvironmentGraph::build(&env_model, &evaluated);
     let traces = graph.all_causal_traces();
-    let diagnoses = unfuck_diagnosis::diagnose_all(&predictions, &traces);
+    let diagnoses = concord_diagnosis::diagnose_all(&predictions, &traces);
     let diag = diagnoses
         .iter()
         .find(|d| d.root_cause.contains("missing.env_file"))
@@ -598,12 +598,12 @@ fn test_fixture_d_compose_resolved_env() {
         "Compose project must be instantiable when .env exists"
     );
 
-    let machine = unfuck_core::ir::MachineCapability::default();
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_core::ir::MachineCapability::default();
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     assert!(
         !evaluated.iter().any(|e| matches!(
             &e.constraint,
-            unfuck_constraints::model::Constraint::ComposeConfigUnresolved { .. }
+            concord_constraints::model::Constraint::ComposeConfigUnresolved { .. }
         )),
         "ComposeConfigUnresolved must NOT be emitted when configuration is resolved"
     );
@@ -615,39 +615,39 @@ fn test_fixture_e_unrelated_postgres_container() {
     let manifest = analyze_project(&fixture_path).expect("analyze unrelated-postgres-container");
 
     // Machine has an unrelated container for project "heym" named "heym-postgres"
-    let mut machine = unfuck_core::ir::MachineCapability::default();
+    let mut machine = concord_core::ir::MachineCapability::default();
     machine
         .containers
-        .push(unfuck_core::ir::ContainerObservation {
+        .push(concord_core::ir::ContainerObservation {
             id: "c999".to_string(),
             names: vec!["heym-postgres".to_string()],
             image: "postgres:16".to_string(),
-            status: unfuck_core::ir::ContainerStatus::Running {
+            status: concord_core::ir::ContainerStatus::Running {
                 healthy: Some(true),
             },
             ports: vec![],
             compose_project: Some("heym".to_string()),
             compose_service: Some("postgres".to_string()),
             labels: std::collections::HashMap::new(),
-            evidence: unfuck_core::evidence::Evidence::from_repo_file(
+            evidence: concord_core::evidence::Evidence::from_repo_file(
                 std::path::PathBuf::from("docker-compose.yml"),
                 None,
                 "Unrelated running container",
             ),
         });
 
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let pg_eval = evaluated
         .iter()
         .find(|e| {
             matches!(
                 &e.constraint,
-                unfuck_constraints::model::Constraint::ComposeServiceState { .. }
+                concord_constraints::model::Constraint::ComposeServiceState { .. }
             )
         })
         .expect("ComposeServiceState constraint");
 
-    if let unfuck_constraints::model::Constraint::ComposeServiceState { actual_state, .. } =
+    if let concord_constraints::model::Constraint::ComposeServiceState { actual_state, .. } =
         &pg_eval.constraint
     {
         assert_eq!(
@@ -666,42 +666,42 @@ fn test_fixture_f_compose_stopped_container() {
     let manifest = analyze_project(&fixture_path).expect("analyze compose-stopped-container");
 
     // Machine has matching stopped container
-    let mut machine = unfuck_core::ir::MachineCapability::default();
+    let mut machine = concord_core::ir::MachineCapability::default();
     machine
         .containers
-        .push(unfuck_core::ir::ContainerObservation {
+        .push(concord_core::ir::ContainerObservation {
             id: "c888".to_string(),
             names: vec!["stopped_postgres".to_string()],
             image: "postgres:16".to_string(),
-            status: unfuck_core::ir::ContainerStatus::Exited { exit_code: 0 },
+            status: concord_core::ir::ContainerStatus::Exited { exit_code: 0 },
             ports: vec![],
             compose_project: Some("stopped_proj".to_string()),
             compose_service: Some("database".to_string()),
             labels: std::collections::HashMap::new(),
-            evidence: unfuck_core::evidence::Evidence::from_repo_file(
+            evidence: concord_core::evidence::Evidence::from_repo_file(
                 std::path::PathBuf::from("docker-compose.yml"),
                 None,
                 "Stopped container",
             ),
         });
 
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let pg_eval = evaluated
         .iter()
         .find(|e| {
             matches!(
                 &e.constraint,
-                unfuck_constraints::model::Constraint::ComposeServiceState { .. }
+                concord_constraints::model::Constraint::ComposeServiceState { .. }
             )
         })
         .expect("ComposeServiceState constraint");
     assert!(pg_eval.is_violated());
 
-    let env_model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let predictions = unfuck_predictor::predict_failures(&env_model, &evaluated);
+    let env_model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let predictions = concord_predictor::predict_failures(&env_model, &evaluated);
     let pred = predictions
         .iter()
-        .find(|p| p.category == unfuck_predictor::PredictionCategory::ContainerStopped)
+        .find(|p| p.category == concord_predictor::PredictionCategory::ContainerStopped)
         .expect("ContainerStopped prediction");
     assert!(pred.summary.contains("exited (0)"));
 }
@@ -726,15 +726,15 @@ fn test_fixture_g_multi_component_java_attribution() {
     assert!(web_comp.languages.iter().any(|l| l.contains("javascript")));
     assert!(mobile_comp.requirements.iter().any(|r| r.name == "java"));
 
-    let machine = unfuck_core::ir::MachineCapability::default();
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
-    let env_model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
+    let machine = concord_core::ir::MachineCapability::default();
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let env_model = concord_core::ir::EnvironmentModel::new(manifest, machine);
 
-    let graph = unfuck_graph::EnvironmentGraph::build(&env_model, &evaluated);
+    let graph = concord_graph::EnvironmentGraph::build(&env_model, &evaluated);
     let traces = graph.all_causal_traces();
     let java_trace = traces
         .iter()
-        .find(|t| matches!(&t.constraint, unfuck_constraints::model::Constraint::RuntimeVersion { runtime, .. } if runtime == "java"))
+        .find(|t| matches!(&t.constraint, concord_constraints::model::Constraint::RuntimeVersion { runtime, .. } if runtime == "java"))
         .expect("Java trace");
 
     assert_eq!(
@@ -757,14 +757,14 @@ fn test_compose_shared_missing_env_deduplication() {
     let cp = &manifest.compose_projects[0];
     assert_eq!(cp.services.len(), 2);
 
-    let machine = unfuck_core::ir::MachineCapability::default();
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
-    let env_model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let predictions = unfuck_predictor::predict_failures(&env_model, &evaluated);
+    let machine = concord_core::ir::MachineCapability::default();
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let env_model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let predictions = concord_predictor::predict_failures(&env_model, &evaluated);
 
-    let graph = unfuck_graph::EnvironmentGraph::build(&env_model, &evaluated);
+    let graph = concord_graph::EnvironmentGraph::build(&env_model, &evaluated);
     let traces = graph.all_causal_traces();
-    let diagnoses = unfuck_diagnosis::diagnose_all(&predictions, &traces);
+    let diagnoses = concord_diagnosis::diagnose_all(&predictions, &traces);
 
     let compose_diags: Vec<_> = diagnoses
         .iter()
@@ -865,13 +865,13 @@ fn test_fixture_compose_project_blocker() {
         "Bootstrap action from setup.sh must be recognized"
     );
 
-    let machine = unfuck_core::ir::MachineCapability::default();
-    let evaluated = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
-    let env_model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let predictions = unfuck_predictor::predict_failures(&env_model, &evaluated);
-    let graph = unfuck_graph::EnvironmentGraph::build(&env_model, &evaluated);
+    let machine = concord_core::ir::MachineCapability::default();
+    let evaluated = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let env_model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let predictions = concord_predictor::predict_failures(&env_model, &evaluated);
+    let graph = concord_graph::EnvironmentGraph::build(&env_model, &evaluated);
     let traces = graph.all_causal_traces();
-    let diagnoses = unfuck_diagnosis::diagnose_all(&predictions, &traces);
+    let diagnoses = concord_diagnosis::diagnose_all(&predictions, &traces);
 
     let compose_diags: Vec<_> = diagnoses
         .iter()
@@ -911,7 +911,7 @@ fn test_fixture_version_build_metadata() {
         .expect("pnpm requirement");
 
     match &pm_req.kind {
-        unfuck_core::ir::RequirementKind::PackageManager { constraint, .. } => {
+        concord_core::ir::RequirementKind::PackageManager { constraint, .. } => {
             let c = constraint.as_ref().expect("pnpm constraint");
             assert_eq!(c.to_string(), "==11.10.0");
             assert!(
@@ -939,7 +939,7 @@ fn test_fixture_env_template_optional_vars() {
         .expect("SECRET_KEY spec");
     assert_eq!(
         secret_spec.category,
-        unfuck_core::ir::EnvVarCategory::Required
+        concord_core::ir::EnvVarCategory::Required
     );
 
     let proxy_spec = manifest
@@ -949,7 +949,7 @@ fn test_fixture_env_template_optional_vars() {
         .expect("OPTIONAL_PROXY spec");
     assert_eq!(
         proxy_spec.category,
-        unfuck_core::ir::EnvVarCategory::IntentionallyEmpty
+        concord_core::ir::EnvVarCategory::IntentionallyEmpty
     );
     assert_eq!(proxy_spec.default_value.as_deref(), Some(""));
 
@@ -960,7 +960,7 @@ fn test_fixture_env_template_optional_vars() {
         .expect("APP_PREFIX spec");
     assert_eq!(
         prefix_spec.category,
-        unfuck_core::ir::EnvVarCategory::IntentionallyEmpty
+        concord_core::ir::EnvVarCategory::IntentionallyEmpty
     );
     assert_eq!(prefix_spec.default_value.as_deref(), Some(""));
 
@@ -971,7 +971,7 @@ fn test_fixture_env_template_optional_vars() {
         .expect("DEBUG spec");
     assert_eq!(
         debug_spec.category,
-        unfuck_core::ir::EnvVarCategory::OptionalWithDefault
+        concord_core::ir::EnvVarCategory::OptionalWithDefault
     );
     assert_eq!(debug_spec.default_value.as_deref(), Some("false"));
 
@@ -981,7 +981,7 @@ fn test_fixture_env_template_optional_vars() {
         .filter(|r| {
             matches!(
                 &r.kind,
-                unfuck_core::ir::RequirementKind::EnvVar { required: true, .. }
+                concord_core::ir::RequirementKind::EnvVar { required: true, .. }
             )
         })
         .count();
@@ -1014,16 +1014,16 @@ fn test_fixture_build_system_compiler() {
     assert!(manifest.requirements.iter().any(|r| r.name == "ninja"));
     assert!(manifest.requirements.iter().any(|r| r.name == "c"));
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     // C compiler should be satisfied on a host with gcc or clang installed
     let compiler_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::CompilerAvailable { language, .. } if language == "c"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::CompilerAvailable { language, .. } if language == "c"))
         .expect("compiler eval");
     assert_eq!(
         compiler_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 }
 
@@ -1034,26 +1034,26 @@ fn test_fixture_build_system_python() {
 
     assert!(manifest.requirements.iter().any(|r| matches!(
         &r.kind,
-        unfuck_core::ir::RequirementKind::LanguagePackage { package, scope, .. }
-            if package == "nonexistent_build_module" && *scope == unfuck_core::ir::ToolScope::RequiredForBuild
+        concord_core::ir::RequirementKind::LanguagePackage { package, scope, .. }
+            if package == "nonexistent_build_module" && *scope == concord_core::ir::ToolScope::RequiredForBuild
     )));
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let pkg_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::LanguagePackageAvailable { package, .. } if package == "nonexistent_build_module"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::LanguagePackageAvailable { package, .. } if package == "nonexistent_build_module"))
         .expect("pkg eval");
     assert!(matches!(
         pkg_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(preds
         .iter()
-        .any(|p| p.category == unfuck_predictor::PredictionCategory::LanguagePackageMissing));
+        .any(|p| p.category == concord_predictor::PredictionCategory::LanguagePackageMissing));
 }
 
 #[test]
@@ -1068,7 +1068,7 @@ fn test_fixture_system_library() {
         .find(|r| r.name == "nonexistent_system_lib_xyz")
         .expect("req lib");
     assert!(
-        matches!(&req_lib.kind, unfuck_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == unfuck_core::ir::ToolScope::RequiredForBuild)
+        matches!(&req_lib.kind, concord_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == concord_core::ir::ToolScope::RequiredForBuild)
     );
 
     let opt_lib = manifest
@@ -1077,31 +1077,31 @@ fn test_fixture_system_library() {
         .find(|r| r.name == "some_optional_lib_abc")
         .expect("opt lib");
     assert!(
-        matches!(&opt_lib.kind, unfuck_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == unfuck_core::ir::ToolScope::Optional)
+        matches!(&opt_lib.kind, concord_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == concord_core::ir::ToolScope::Optional)
     );
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
 
     // Required library should be violated
-    let req_eval = evals.iter().find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "nonexistent_system_lib_xyz")).expect("req eval");
+    let req_eval = evals.iter().find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "nonexistent_system_lib_xyz")).expect("req eval");
     assert!(matches!(
         req_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 
     // Optional library should be satisfied (false-positive control)
-    let opt_eval = evals.iter().find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "some_optional_lib_abc")).expect("opt eval");
+    let opt_eval = evals.iter().find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "some_optional_lib_abc")).expect("opt eval");
     assert_eq!(
         opt_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(preds
         .iter()
-        .any(|p| p.category == unfuck_predictor::PredictionCategory::SystemLibraryMissing));
+        .any(|p| p.category == concord_predictor::PredictionCategory::SystemLibraryMissing));
     // Optional library should NOT be in predictions
     assert!(!preds
         .iter()
@@ -1119,18 +1119,18 @@ fn test_fixture_build_tool_version() {
         .find(|r| r.name == "meson")
         .expect("meson req");
     match &meson_req.kind {
-        unfuck_core::ir::RequirementKind::BuildTool { constraint, .. } => {
+        concord_core::ir::RequirementKind::BuildTool { constraint, .. } => {
             assert!(constraint.is_some());
         }
         _ => panic!("Expected BuildTool"),
     }
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
-    let meson_eval = evals.iter().find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::ToolAvailable { name, .. } if name == "meson")).expect("meson eval");
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let meson_eval = evals.iter().find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ToolAvailable { name, .. } if name == "meson")).expect("meson eval");
     assert!(matches!(
         meson_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 }
 
@@ -1145,10 +1145,10 @@ fn test_fixture_cmake_version() {
         .find(|r| r.name == "cmake")
         .expect("cmake req");
     match &cmake_req.kind {
-        unfuck_core::ir::RequirementKind::BuildTool {
+        concord_core::ir::RequirementKind::BuildTool {
             constraint, scope, ..
         } => {
-            assert_eq!(*scope, unfuck_core::ir::ToolScope::RequiredForBuild);
+            assert_eq!(*scope, concord_core::ir::ToolScope::RequiredForBuild);
             assert!(constraint.is_some());
             assert!(constraint.as_ref().unwrap().matches("99.0"));
             assert!(!constraint.as_ref().unwrap().matches("3.20.0"));
@@ -1156,22 +1156,22 @@ fn test_fixture_cmake_version() {
         _ => panic!("Expected BuildTool"),
     }
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let cmake_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::ToolAvailable { name, .. } if name == "cmake"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ToolAvailable { name, .. } if name == "cmake"))
         .expect("cmake eval");
     assert!(matches!(
         cmake_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(preds
         .iter()
-        .any(|p| p.category == unfuck_predictor::PredictionCategory::ToolMissing));
+        .any(|p| p.category == concord_predictor::PredictionCategory::ToolMissing));
 }
 
 #[test]
@@ -1187,7 +1187,7 @@ fn test_fixture_cmake_compiler() {
         .find(|r| r.name == "c")
         .expect("c compiler req");
     match &c_req.kind {
-        unfuck_core::ir::RequirementKind::Compiler {
+        concord_core::ir::RequirementKind::Compiler {
             language,
             min_standard,
             ..
@@ -1198,16 +1198,16 @@ fn test_fixture_cmake_compiler() {
         _ => panic!("Expected Compiler"),
     }
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let c_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::CompilerAvailable { language, .. } if language == "c"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::CompilerAvailable { language, .. } if language == "c"))
         .expect("c eval");
     // Host has GCC 15 supporting c11, so it should be satisfied
     assert_eq!(
         c_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 }
 
@@ -1222,25 +1222,25 @@ fn test_fixture_cmake_package_required() {
         .find(|r| r.name == "nonexistenttestpackage")
         .expect("nonexistenttestpackage req");
     assert!(
-        matches!(&pkg_req.kind, unfuck_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == unfuck_core::ir::ToolScope::RequiredForBuild)
+        matches!(&pkg_req.kind, concord_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == concord_core::ir::ToolScope::RequiredForBuild)
     );
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let pkg_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "nonexistenttestpackage"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "nonexistenttestpackage"))
         .expect("pkg eval");
     assert!(matches!(
         pkg_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(preds
         .iter()
-        .any(|p| p.category == unfuck_predictor::PredictionCategory::SystemLibraryMissing));
+        .any(|p| p.category == concord_predictor::PredictionCategory::SystemLibraryMissing));
 }
 
 #[test]
@@ -1254,23 +1254,23 @@ fn test_fixture_cmake_optional_package() {
         .find(|r| r.name == "optionaltestpackage")
         .expect("optionaltestpackage req");
     assert!(
-        matches!(&opt_req.kind, unfuck_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == unfuck_core::ir::ToolScope::Optional)
+        matches!(&opt_req.kind, concord_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == concord_core::ir::ToolScope::Optional)
     );
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let opt_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "optionaltestpackage"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "optionaltestpackage"))
         .expect("opt eval");
     // Strict false-positive control: optional package evaluates as Satisfied
     assert_eq!(
         opt_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(!preds
         .iter()
         .any(|p| p.summary.contains("optionaltestpackage")));
@@ -1287,25 +1287,25 @@ fn test_fixture_cmake_system_library() {
         .find(|r| r.name == "nonexistent_native_lib")
         .expect("nonexistent_native_lib req");
     assert!(
-        matches!(&lib_req.kind, unfuck_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == unfuck_core::ir::ToolScope::RequiredForBuild)
+        matches!(&lib_req.kind, concord_core::ir::RequirementKind::SystemLibrary { scope, .. } if *scope == concord_core::ir::ToolScope::RequiredForBuild)
     );
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let lib_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "nonexistent_native_lib"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } if name == "nonexistent_native_lib"))
         .expect("lib eval");
     assert!(matches!(
         lib_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(preds
         .iter()
-        .any(|p| p.category == unfuck_predictor::PredictionCategory::SystemLibraryMissing));
+        .any(|p| p.category == concord_predictor::PredictionCategory::SystemLibraryMissing));
 }
 
 #[test]
@@ -1316,11 +1316,11 @@ fn test_fixture_anyof_satisfied() {
     let anyof_req = manifest
         .requirements
         .iter()
-        .find(|r| matches!(&r.kind, unfuck_core::ir::RequirementKind::AnyOf { .. }))
+        .find(|r| matches!(&r.kind, concord_core::ir::RequirementKind::AnyOf { .. }))
         .expect("AnyOf requirement");
 
     match &anyof_req.kind {
-        unfuck_core::ir::RequirementKind::AnyOf {
+        concord_core::ir::RequirementKind::AnyOf {
             capability,
             alternatives,
             ..
@@ -1331,24 +1331,24 @@ fn test_fixture_anyof_satisfied() {
         _ => unreachable!(),
     }
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let anyof_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::AnyOf { capability, .. } if capability == "crypto-backend"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::AnyOf { capability, .. } if capability == "crypto-backend"))
         .expect("anyof eval");
 
     // OpenSSL is installed on host, so AnyOf is satisfied
     assert_eq!(
         anyof_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(!preds
         .iter()
-        .any(|p| p.category == unfuck_predictor::PredictionCategory::CapabilityUnsatisfied));
+        .any(|p| p.category == concord_predictor::PredictionCategory::CapabilityUnsatisfied));
 }
 
 #[test]
@@ -1359,11 +1359,11 @@ fn test_fixture_anyof_unsatisfied() {
     let anyof_req = manifest
         .requirements
         .iter()
-        .find(|r| matches!(&r.kind, unfuck_core::ir::RequirementKind::AnyOf { .. }))
+        .find(|r| matches!(&r.kind, concord_core::ir::RequirementKind::AnyOf { .. }))
         .expect("AnyOf requirement");
 
     match &anyof_req.kind {
-        unfuck_core::ir::RequirementKind::AnyOf {
+        concord_core::ir::RequirementKind::AnyOf {
             capability,
             alternatives,
             ..
@@ -1374,29 +1374,29 @@ fn test_fixture_anyof_unsatisfied() {
         _ => unreachable!(),
     }
 
-    let machine = unfuck_scanner::scan_machine();
-    let evals = unfuck_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let machine = concord_scanner::scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
     let anyof_eval = evals
         .iter()
-        .find(|e| matches!(&e.constraint, unfuck_constraints::model::Constraint::AnyOf { capability, .. } if capability == "provider-backend"))
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::AnyOf { capability, .. } if capability == "provider-backend"))
         .expect("anyof eval");
 
     assert!(matches!(
         anyof_eval.status,
-        unfuck_constraints::model::ConstraintStatus::Violated { .. }
+        concord_constraints::model::ConstraintStatus::Violated { .. }
     ));
 
-    let model = unfuck_core::ir::EnvironmentModel::new(manifest, machine);
-    let preds = unfuck_predictor::predict_failures(&model, &evals);
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
     let pred = preds
         .iter()
-        .find(|p| p.category == unfuck_predictor::PredictionCategory::CapabilityUnsatisfied)
+        .find(|p| p.category == concord_predictor::PredictionCategory::CapabilityUnsatisfied)
         .expect("CapabilityUnsatisfied prediction");
     assert!(pred.summary.contains("provider-backend"));
 
-    let graph = unfuck_graph::EnvironmentGraph::build(&model, &evals);
+    let graph = concord_graph::EnvironmentGraph::build(&model, &evals);
     let traces = graph.all_causal_traces();
-    let diagnoses = unfuck_diagnosis::diagnose_all(&preds, &traces);
+    let diagnoses = concord_diagnosis::diagnose_all(&preds, &traces);
     let diag = diagnoses
         .iter()
         .find(|d| {
@@ -1419,7 +1419,7 @@ fn test_system_library_version_evaluation_end_to_end() {
     std::fs::write(temp_dir.path().join("libmocktls.pc"), pc_v1).unwrap();
     std::fs::write(temp_dir.path().join("libmockcrypto.pc"), pc_v3).unwrap();
 
-    let mut machine = unfuck_core::ir::MachineCapability::empty();
+    let mut machine = concord_core::ir::MachineCapability::empty();
     machine.env_vars.insert(
         "PKG_CONFIG_PATH".to_string(),
         temp_dir.path().display().to_string(),
@@ -1427,30 +1427,30 @@ fn test_system_library_version_evaluation_end_to_end() {
 
     // 1. Incompatible version: libmocktls required >= 2.0.0 (installed: 1.1.1)
     let mut manifest_incomp =
-        unfuck_core::ir::ProjectManifest::empty("test_incomp", temp_dir.path().to_path_buf());
+        concord_core::ir::ProjectManifest::empty("test_incomp", temp_dir.path().to_path_buf());
     manifest_incomp
         .requirements
-        .push(unfuck_core::ir::ProjectRequirement::new(
+        .push(concord_core::ir::ProjectRequirement::new(
             "libmocktls",
-            unfuck_core::ir::RequirementKind::SystemLibrary {
+            concord_core::ir::RequirementKind::SystemLibrary {
                 name: "libmocktls".to_string(),
                 header: None,
-                constraint: Some(unfuck_core::VersionConstraint::parse(">= 2.0.0")),
-                scope: unfuck_core::ir::ToolScope::RequiredForBuild,
+                constraint: Some(concord_core::VersionConstraint::parse(">= 2.0.0")),
+                scope: concord_core::ir::ToolScope::RequiredForBuild,
             },
-            unfuck_core::evidence::Evidence::new(
-                unfuck_core::evidence::EvidenceSource::DirectObservation {
+            concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::DirectObservation {
                     detail: "test manifest".to_string(),
                 },
-                unfuck_core::Confidence::Confirmed,
+                concord_core::Confidence::Confirmed,
                 "requires libmocktls >= 2.0.0".to_string(),
             ),
         ));
 
-    let evals_incomp = unfuck_constraints::evaluator::evaluate_project(&manifest_incomp, &machine);
+    let evals_incomp = concord_constraints::evaluator::evaluate_project(&manifest_incomp, &machine);
     assert_eq!(evals_incomp.len(), 1);
     assert!(evals_incomp[0].is_violated());
-    if let unfuck_constraints::model::ConstraintStatus::Violated {
+    if let concord_constraints::model::ConstraintStatus::Violated {
         root_cause_hint,
         reason,
     } = &evals_incomp[0].status
@@ -1460,21 +1460,21 @@ fn test_system_library_version_evaluation_end_to_end() {
     }
 
     let model_incomp =
-        unfuck_core::ir::EnvironmentModel::new(manifest_incomp.clone(), machine.clone());
-    let preds_incomp = unfuck_predictor::predict_failures(&model_incomp, &evals_incomp);
+        concord_core::ir::EnvironmentModel::new(manifest_incomp.clone(), machine.clone());
+    let preds_incomp = concord_predictor::predict_failures(&model_incomp, &evals_incomp);
     assert_eq!(preds_incomp.len(), 1);
     assert_eq!(
         preds_incomp[0].category,
-        unfuck_predictor::PredictionCategory::SystemLibraryIncompatible
+        concord_predictor::PredictionCategory::SystemLibraryIncompatible
     );
     assert_eq!(
         preds_incomp[0].title,
         "System library 'libmocktls' version incompatible"
     );
 
-    let graph_incomp = unfuck_graph::EnvironmentGraph::build(&model_incomp, &evals_incomp);
+    let graph_incomp = concord_graph::EnvironmentGraph::build(&model_incomp, &evals_incomp);
     let traces_incomp = graph_incomp.all_causal_traces();
-    let diags_incomp = unfuck_diagnosis::diagnose_all(&preds_incomp, &traces_incomp);
+    let diags_incomp = concord_diagnosis::diagnose_all(&preds_incomp, &traces_incomp);
     assert_eq!(diags_incomp.len(), 1);
     assert_eq!(
         diags_incomp[0].problem,
@@ -1486,95 +1486,95 @@ fn test_system_library_version_evaluation_end_to_end() {
 
     // 2. Compatible version: libmockcrypto required >= 2.0.0 (installed: 3.0.2)
     let mut manifest_comp =
-        unfuck_core::ir::ProjectManifest::empty("test_comp", temp_dir.path().to_path_buf());
+        concord_core::ir::ProjectManifest::empty("test_comp", temp_dir.path().to_path_buf());
     manifest_comp
         .requirements
-        .push(unfuck_core::ir::ProjectRequirement::new(
+        .push(concord_core::ir::ProjectRequirement::new(
             "libmockcrypto",
-            unfuck_core::ir::RequirementKind::SystemLibrary {
+            concord_core::ir::RequirementKind::SystemLibrary {
                 name: "libmockcrypto".to_string(),
                 header: None,
-                constraint: Some(unfuck_core::VersionConstraint::parse(">= 2.0.0")),
-                scope: unfuck_core::ir::ToolScope::RequiredForBuild,
+                constraint: Some(concord_core::VersionConstraint::parse(">= 2.0.0")),
+                scope: concord_core::ir::ToolScope::RequiredForBuild,
             },
-            unfuck_core::evidence::Evidence::new(
-                unfuck_core::evidence::EvidenceSource::DirectObservation {
+            concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::DirectObservation {
                     detail: "test manifest".to_string(),
                 },
-                unfuck_core::Confidence::Confirmed,
+                concord_core::Confidence::Confirmed,
                 "requires libmockcrypto >= 2.0.0".to_string(),
             ),
         ));
 
-    let evals_comp = unfuck_constraints::evaluator::evaluate_project(&manifest_comp, &machine);
+    let evals_comp = concord_constraints::evaluator::evaluate_project(&manifest_comp, &machine);
     assert_eq!(evals_comp.len(), 1);
     assert_eq!(
         evals_comp[0].status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 
-    let model_comp = unfuck_core::ir::EnvironmentModel::new(manifest_comp, machine.clone());
-    let preds_comp = unfuck_predictor::predict_failures(&model_comp, &evals_comp);
+    let model_comp = concord_core::ir::EnvironmentModel::new(manifest_comp, machine.clone());
+    let preds_comp = concord_predictor::predict_failures(&model_comp, &evals_comp);
     assert!(preds_comp.is_empty());
 
     // 3. Disjunctive AnyOf requirement: requires (libmocktls >= 2.0 OR libmockcrypto >= 2.0)
     let mut manifest_anyof =
-        unfuck_core::ir::ProjectManifest::empty("test_anyof", temp_dir.path().to_path_buf());
+        concord_core::ir::ProjectManifest::empty("test_anyof", temp_dir.path().to_path_buf());
     manifest_anyof
         .requirements
-        .push(unfuck_core::ir::ProjectRequirement::new(
+        .push(concord_core::ir::ProjectRequirement::new(
             "security-backend",
-            unfuck_core::ir::RequirementKind::AnyOf {
+            concord_core::ir::RequirementKind::AnyOf {
                 capability: "security-backend".to_string(),
                 alternatives: vec![
-                    unfuck_core::ir::ProjectRequirement::new(
+                    concord_core::ir::ProjectRequirement::new(
                         "libmocktls",
-                        unfuck_core::ir::RequirementKind::SystemLibrary {
+                        concord_core::ir::RequirementKind::SystemLibrary {
                             name: "libmocktls".to_string(),
                             header: None,
-                            constraint: Some(unfuck_core::VersionConstraint::parse(">= 2.0.0")),
-                            scope: unfuck_core::ir::ToolScope::RequiredForBuild,
+                            constraint: Some(concord_core::VersionConstraint::parse(">= 2.0.0")),
+                            scope: concord_core::ir::ToolScope::RequiredForBuild,
                         },
-                        unfuck_core::evidence::Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::DirectObservation {
+                        concord_core::evidence::Evidence::new(
+                            concord_core::evidence::EvidenceSource::DirectObservation {
                                 detail: "test".to_string(),
                             },
-                            unfuck_core::Confidence::Confirmed,
+                            concord_core::Confidence::Confirmed,
                             "alt 1".to_string(),
                         ),
                     ),
-                    unfuck_core::ir::ProjectRequirement::new(
+                    concord_core::ir::ProjectRequirement::new(
                         "libmockcrypto",
-                        unfuck_core::ir::RequirementKind::SystemLibrary {
+                        concord_core::ir::RequirementKind::SystemLibrary {
                             name: "libmockcrypto".to_string(),
                             header: None,
-                            constraint: Some(unfuck_core::VersionConstraint::parse(">= 2.0.0")),
-                            scope: unfuck_core::ir::ToolScope::RequiredForBuild,
+                            constraint: Some(concord_core::VersionConstraint::parse(">= 2.0.0")),
+                            scope: concord_core::ir::ToolScope::RequiredForBuild,
                         },
-                        unfuck_core::evidence::Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::DirectObservation {
+                        concord_core::evidence::Evidence::new(
+                            concord_core::evidence::EvidenceSource::DirectObservation {
                                 detail: "test".to_string(),
                             },
-                            unfuck_core::Confidence::Confirmed,
+                            concord_core::Confidence::Confirmed,
                             "alt 2".to_string(),
                         ),
                     ),
                 ],
-                scope: unfuck_core::ir::ToolScope::RequiredForBuild,
+                scope: concord_core::ir::ToolScope::RequiredForBuild,
             },
-            unfuck_core::evidence::Evidence::new(
-                unfuck_core::evidence::EvidenceSource::DirectObservation {
+            concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::DirectObservation {
                     detail: "test manifest".to_string(),
                 },
-                unfuck_core::Confidence::Confirmed,
+                concord_core::Confidence::Confirmed,
                 "requires security backend".to_string(),
             ),
         ));
 
-    let evals_anyof = unfuck_constraints::evaluator::evaluate_project(&manifest_anyof, &machine);
+    let evals_anyof = concord_constraints::evaluator::evaluate_project(&manifest_anyof, &machine);
     assert_eq!(evals_anyof.len(), 1);
     assert_eq!(
         evals_anyof[0].status,
-        unfuck_constraints::model::ConstraintStatus::Satisfied
+        concord_constraints::model::ConstraintStatus::Satisfied
     );
 }

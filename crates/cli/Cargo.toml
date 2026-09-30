@@ -1,5 +1,5 @@
 [package]
-name = "unfuck"
+name = "concord"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,22 +7,22 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-name = "unfuck"
+name = "concord"
 path = "src/lib.rs"
 
 [[bin]]
-name = "unfuck"
+name = "concord"
 path = "src/main.rs"
 
 [dependencies]
-unfuck-core = { path = "../core" }
-unfuck-scanner = { path = "../scanner" }
-unfuck-project = { path = "../project" }
-unfuck-constraints = { path = "../constraints" }
-unfuck-graph = { path = "../graph" }
-unfuck-predictor = { path = "../predictor" }
-unfuck-diagnosis = { path = "../diagnosis" }
-unfuck-verifier = { path = "../verifier" }
+concord-core = { path = "../core" }
+concord-scanner = { path = "../scanner" }
+concord-project = { path = "../project" }
+concord-constraints = { path = "../constraints" }
+concord-graph = { path = "../graph" }
+concord-predictor = { path = "../predictor" }
+concord-diagnosis = { path = "../diagnosis" }
+concord-verifier = { path = "../verifier" }
 clap = { workspace = true }
 colored = { workspace = true }
 serde = { workspace = true }

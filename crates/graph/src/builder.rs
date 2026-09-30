@@ -1,11 +1,11 @@
 use crate::model::{CausalTrace, EdgeData, NodeData};
+use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
+use concord_core::evidence::Evidence;
+use concord_core::ir::EnvironmentModel;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use std::collections::HashMap;
-use unfuck_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::EnvironmentModel;
 
 /// The environment graph connecting Project, Components, Requirements, Machine capabilities, Constraints, and Evidence.
 #[derive(Debug, Clone)]
@@ -213,7 +213,7 @@ impl EnvironmentGraph {
 
                     // 1. Evidence source path matches component name or directory (highest priority)
                     if let Some(ref p_ev) = eval.project_evidence {
-                        if let unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                        if let concord_core::evidence::EvidenceSource::RepositoryFile {
                             path, ..
                         } = &p_ev.source
                         {
@@ -452,7 +452,7 @@ impl EnvironmentGraph {
                 }) = self.graph.node_weight(edge.target())
                 {
                     project_evidence = Some(Evidence::new(
-                        unfuck_core::evidence::EvidenceSource::DirectObservation {
+                        concord_core::evidence::EvidenceSource::DirectObservation {
                             detail: description.clone(),
                         },
                         *confidence,
@@ -516,7 +516,7 @@ impl EnvironmentGraph {
                                     }) = self.graph.node_weight(out_edge.target())
                                     {
                                         machine_evidence = Some(Evidence::new(
-                                            unfuck_core::evidence::EvidenceSource::ExecutableInspection {
+                                            concord_core::evidence::EvidenceSource::ExecutableInspection {
                                                 path: executable_path.clone(),
                                                 version_string: version.clone(),
                                                 exit_code: 0,
@@ -540,7 +540,7 @@ impl EnvironmentGraph {
                                     }) = self.graph.node_weight(out_edge.target())
                                     {
                                         machine_evidence = Some(Evidence::new(
-                                            unfuck_core::evidence::EvidenceSource::NetworkProbe {
+                                            concord_core::evidence::EvidenceSource::NetworkProbe {
                                                 target: format!("localhost:{}", port),
                                                 outcome: "OCCUPIED".to_string(),
                                             },
@@ -570,7 +570,7 @@ impl EnvironmentGraph {
                                     }) = self.graph.node_weight(out_edge.target())
                                     {
                                         machine_evidence = Some(Evidence::new(
-                                            unfuck_core::evidence::EvidenceSource::DirectObservation {
+                                            concord_core::evidence::EvidenceSource::DirectObservation {
                                                 detail: format!("service: {}", name),
                                             },
                                             *confidence,
@@ -602,7 +602,7 @@ impl EnvironmentGraph {
                                     }) = self.graph.node_weight(out_edge.target())
                                     {
                                         machine_evidence = Some(Evidence::new(
-                                            unfuck_core::evidence::EvidenceSource::ExecutableInspection {
+                                            concord_core::evidence::EvidenceSource::ExecutableInspection {
                                                 path: executable_path.clone(),
                                                 version_string: ver_str.to_string(),
                                                 exit_code: 0,
@@ -636,7 +636,7 @@ impl EnvironmentGraph {
                                     }) = self.graph.node_weight(out_edge.target())
                                     {
                                         machine_evidence = Some(Evidence::new(
-                                            unfuck_core::evidence::EvidenceSource::ExecutableInspection {
+                                            concord_core::evidence::EvidenceSource::ExecutableInspection {
                                                 path: executable_path.clone(),
                                                 version_string: ver_str.to_string(),
                                                 exit_code: 0,
@@ -667,7 +667,7 @@ impl EnvironmentGraph {
                                     }) = self.graph.node_weight(out_edge.target())
                                     {
                                         machine_evidence = Some(Evidence::new(
-                                            unfuck_core::evidence::EvidenceSource::DirectObservation {
+                                            concord_core::evidence::EvidenceSource::DirectObservation {
                                                 detail: format!("container: {} {}", name, image),
                                             },
                                             *confidence,

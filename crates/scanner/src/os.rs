@@ -1,7 +1,7 @@
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::Confidence;
 use std::fs;
 use sysinfo::System;
-use unfuck_core::evidence::{Evidence, EvidenceSource};
-use unfuck_core::Confidence;
 
 pub struct OsInfo {
     pub os: String,

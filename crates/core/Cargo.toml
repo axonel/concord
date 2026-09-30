@@ -1,5 +1,5 @@
 [package]
-name = "unfuck-core"
+name = "concord-core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

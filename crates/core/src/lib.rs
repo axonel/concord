@@ -5,7 +5,7 @@ pub mod ir;
 pub mod version;
 
 pub use confidence::Confidence;
-pub use error::{Result, UnfuckError};
+pub use error::{ConcordError, Result};
 pub use evidence::{Evidence, EvidenceSource};
 pub use ir::*;
 pub use version::*;

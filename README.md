@@ -1,4 +1,4 @@
-# UNFUCK
+# CONCORD
 
 > **Development-environment resolution engine that predicts failures before they happen, determines root causes with verifiable evidence, and proves environment invariants.**
 
@@ -6,10 +6,10 @@ Modern development setups fail because code does not run in isolation—it depen
 
 Conventional "doctor" commands merely test if a command exists in PATH.
 
-**UNFUCK models your project and machine as a constraint graph to answer:**
+**CONCORD models your project and machine as a constraint graph to answer:**
 > *Why will this project fail on this machine, what chain of dependencies causes the failure, and can we prove it before running?*
 
-**Zero AI required.** UNFUCK is 100% deterministic systems software written in Rust.
+**Zero AI required.** CONCORD is 100% deterministic systems software written in Rust.
 
 ---
 
@@ -18,14 +18,14 @@ Conventional "doctor" commands merely test if a command exists in PATH.
 Install the latest release with one command (no Rust, Cargo, Node, or Docker required):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/axonel/unfuck/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/axonel/concord/main/install.sh | sh
 ```
 
-The installer verifies SHA256 checksums automatically and places `unfuck` in `~/.local/bin`.
+The installer verifies SHA256 checksums automatically and places `concord` in `~/.local/bin`.
 
 To install a specific version or custom directory:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/axonel/unfuck/main/install.sh | UNFUCK_VERSION=v0.2.1 sh
+curl -fsSL https://raw.githubusercontent.com/axonel/concord/main/install.sh | CONCORD_VERSION=v0.2.1 sh
 ```
 
 ---
@@ -35,12 +35,12 @@ curl -fsSL https://raw.githubusercontent.com/axonel/unfuck/main/install.sh | UNF
 ### 1. Run in your project root
 
 ```bash
-unfuck .
+concord .
 ```
 
 #### If your environment is compatible:
 ```text
-UNFUCK — Development Environment Engine
+CONCORD — Development Environment Engine
 ──────────────────────────────────────────
 Project:     .
 Name:        my-backend
@@ -59,7 +59,7 @@ No known blockers.
 
 #### If your environment has contradictions:
 ```text
-UNFUCK — Development Environment Engine
+CONCORD — Development Environment Engine
 ──────────────────────────────────────────
 Project:     tests/fixtures/broken-python-version
 Name:        broken-python-version
@@ -73,8 +73,8 @@ Languages:   python
              Project depends on service 'postgresql', but it is not running or not installed. Connections will be refused.
 
 Next steps:
-  unfuck explain     Inspect root causes and causal dependency chains
-  unfuck verify      Run read-only environment verification checks
+  concord explain     Inspect root causes and causal dependency chains
+  concord verify      Run read-only environment verification checks
 ```
 
 ---
@@ -82,13 +82,13 @@ Next steps:
 ### 2. Inspect the causal root causes
 
 ```bash
-unfuck explain
+concord explain
 ```
 
 Traces the dependency graph back to the earliest violated invariant with exact machine provenance:
 
 ```text
-UNFUCK — Development Environment Engine
+CONCORD — Development Environment Engine
 ──────────────────────────────────────────
 Root-Cause Diagnosis & Causal Chains
 
@@ -124,11 +124,11 @@ Root-Cause Diagnosis & Causal Chains
 Verify all requirements, ports, and services non-destructively:
 
 ```bash
-unfuck verify
+concord verify
 ```
 
 ```text
-UNFUCK — Development Environment Engine
+CONCORD — Development Environment Engine
 ──────────────────────────────────────────
 Read-Only Environment Verification
 
@@ -147,7 +147,7 @@ Environment verification FAILED.
 Every command supports `--json` for CI/CD pipelines, pre-commit hooks, and developer tooling:
 
 ```bash
-unfuck . --json
+concord . --json
 ```
 
 ```json
@@ -212,20 +212,20 @@ If you prefer to download release binaries directly from GitHub Releases:
 
 1. Download the archive and SHA256 checksum:
    ```bash
-   curl -LO https://github.com/axonel/unfuck/releases/download/v0.2.1/unfuck-v0.2.1-linux-x86_64.tar.gz
-   curl -LO https://github.com/axonel/unfuck/releases/download/v0.2.1/unfuck-v0.2.1-linux-x86_64.tar.gz.sha256
+   curl -LO https://github.com/axonel/concord/releases/download/v0.2.1/concord-v0.2.1-linux-x86_64.tar.gz
+   curl -LO https://github.com/axonel/concord/releases/download/v0.2.1/concord-v0.2.1-linux-x86_64.tar.gz.sha256
    ```
 
 2. Verify the checksum:
    ```bash
-   sha256sum -c unfuck-v0.2.1-linux-x86_64.tar.gz.sha256
+   sha256sum -c concord-v0.2.1-linux-x86_64.tar.gz.sha256
    ```
 
 3. Extract and move to your PATH:
    ```bash
-   tar -xzf unfuck-v0.2.1-linux-x86_64.tar.gz
+   tar -xzf concord-v0.2.1-linux-x86_64.tar.gz
    mkdir -p ~/.local/bin
-   mv unfuck-v0.2.1-linux-x86_64/unfuck ~/.local/bin/
+   mv concord-v0.2.1-linux-x86_64/concord ~/.local/bin/
    ```
 
 ---
@@ -233,10 +233,10 @@ If you prefer to download release binaries directly from GitHub Releases:
 ## Building From Source
 
 ```bash
-git clone https://github.com/axonel/unfuck.git
-cd unfuck
+git clone https://github.com/axonel/concord.git
+cd concord
 cargo build --release
-./target/release/unfuck --version
+./target/release/concord --version
 ```
 
 ---

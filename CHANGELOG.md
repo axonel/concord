@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to UNFUCK will be documented in this file.
+All notable changes to CONCORD will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3-tier environment variable categorization (`Required`, `OptionalWithDefault`, `ConfiguredLocal`).
 - Configuration conflict detection.
 - Dynamic TCP socket probes.
-- Graph traversal and root-cause causal diagnosis (`unfuck explain`).
+- Graph traversal and root-cause causal diagnosis (`concord explain`).
 
 ## [0.1.1] - 2026-09-21
 

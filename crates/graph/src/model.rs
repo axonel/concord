@@ -1,9 +1,9 @@
+use concord_constraints::model::{Constraint, ConstraintStatus};
+use concord_core::evidence::Evidence;
+use concord_core::ir::{PortState, RequirementKind, ServiceStatus};
+use concord_core::Confidence;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use unfuck_constraints::model::{Constraint, ConstraintStatus};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{PortState, RequirementKind, ServiceStatus};
-use unfuck_core::Confidence;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "node_type", rename_all = "snake_case")]
@@ -42,7 +42,7 @@ pub enum NodeData {
     Container {
         name: String,
         image: String,
-        status: unfuck_core::ir::ContainerStatus,
+        status: concord_core::ir::ContainerStatus,
     },
     Service {
         name: String,

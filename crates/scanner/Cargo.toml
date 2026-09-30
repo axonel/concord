@@ -1,5 +1,5 @@
 [package]
-name = "unfuck-scanner"
+name = "concord-scanner"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-unfuck-core = { path = "../core" }
+concord-core = { path = "../core" }
 sysinfo = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

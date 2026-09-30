@@ -1,8 +1,8 @@
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::Confidence;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use unfuck_core::evidence::{Evidence, EvidenceSource};
-use unfuck_core::Confidence;
 
 /// Parse PATH into a list of existing directories.
 pub fn parse_path_entries() -> Vec<PathBuf> {
