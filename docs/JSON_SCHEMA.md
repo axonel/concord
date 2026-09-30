@@ -1,16 +1,16 @@
-# UNFUCK Public JSON Interface Specification
+# CONCORD Public JSON Interface Specification
 
-UNFUCK provides a stable, machine-readable JSON contract designed for CI/CD pipelines, agent integrations, developer tooling, and IDE extensions.
+CONCORD provides a stable, machine-readable JSON contract designed for CI/CD pipelines, agent integrations, developer tooling, and IDE extensions.
 
 All commands support `--json` to output structured data instead of terminal formatting.
 
 ---
 
-## 1. Top-Level Execution: `unfuck [PATH] --json`
+## 1. Top-Level Execution: `concord [PATH] --json`
 
-Executing `unfuck . --json` returns a complete `UnfuckReport` containing the project manifest, host machine capabilities, evaluated constraints, failure predictions, root-cause diagnoses, and verification report.
+Executing `concord . --json` returns a complete `ConcordReport` containing the project manifest, host machine capabilities, evaluated constraints, failure predictions, root-cause diagnoses, and verification report.
 
-### Schema: `UnfuckReport`
+### Schema: `ConcordReport`
 
 ```json
 {
@@ -156,16 +156,16 @@ Executing `unfuck . --json` returns a complete `UnfuckReport` containing the pro
 
 ## 2. Subcommands with `--json`
 
-### `unfuck scan [PATH] --json`
+### `concord scan [PATH] --json`
 Returns `{ "project": ProjectManifest, "machine": MachineCapability }`.
 
-### `unfuck predict [PATH] --json`
+### `concord predict [PATH] --json`
 Returns `Vec<Prediction>`.
 
-### `unfuck explain [PATH] [--target <name>] --json`
+### `concord explain [PATH] [--target <name>] --json`
 Returns `Vec<Diagnosis>`, filtered by optional `--target`.
 
-### `unfuck verify [PATH] --json`
+### `concord verify [PATH] --json`
 Returns `VerificationReport`.
 
 ---

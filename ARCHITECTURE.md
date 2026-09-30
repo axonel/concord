@@ -1,43 +1,43 @@
-# UNFUCK Architecture
+# CONCORD Architecture
 
-This document describes the internal design, crate organization, data flow, and engineering principles of **UNFUCK**.
+This document describes the internal design, crate organization, data flow, and engineering principles of **CONCORD**.
 
 ---
 
 ## 1. System Pipeline
 
-UNFUCK processes environments through a unidirectional, deterministic pipeline:
+CONCORD processes environments through a unidirectional, deterministic pipeline:
 
 ```text
-               CLI (unfuck)
+               CLI (concord)
                     │
         ┌───────────┴───────────┐
         ▼                       ▼
  Project Analyzer        Machine Scanner
- (unfuck-project)        (unfuck-scanner)
+ (concord-project)        (concord-scanner)
         │                       │
         └───────────┬───────────┘
                     ▼
              Environment IR
-              (unfuck-core)
+              (concord-core)
                     │
                     ▼
             Environment Graph
-              (unfuck-graph)
+              (concord-graph)
                     │
                     ▼
             Constraint Engine
-           (unfuck-constraints)
+           (concord-constraints)
                     │
         ┌───────────┴───────────┐
         ▼                       ▼
 Failure Predictor        Diagnosis Engine
-(unfuck-predictor)       (unfuck-diagnosis)
+(concord-predictor)       (concord-diagnosis)
         │                       │
         └───────────┬───────────┘
                     ▼
            Read-Only Verifier
-           (unfuck-verifier)
+           (concord-verifier)
                     │
                     ▼
           Presentation (CLI / JSON)
@@ -51,21 +51,21 @@ The codebase is organized into small, cohesive, decoupled crates:
 
 | Crate | Responsibility | Dependencies |
 | :--- | :--- | :--- |
-| `unfuck-core` | Canonical Intermediate Representation (IR), `Evidence`, `EvidenceSource`, `Confidence`, and `UnfuckError`. | `serde`, `semver`, `thiserror` |
-| `unfuck-scanner` | Deterministic Linux machine inspection. Parses `/proc/net/tcp` for listening ports, probes `/proc/[pid]/fd` for process attribution, checks `/etc/os-release`, queries PATH for runtimes, and inspects Docker / PostgreSQL. | `unfuck-core`, `sysinfo`, `serde` |
-| `unfuck-project` | Repository signal discovery. Parses `package.json`, `bun.lock`, `pyproject.toml`, `requirements.txt`, `Dockerfile`, `compose.yaml`, `.nvmrc`, `.python-version`, `.tool-versions`, and `.env.example`. | `unfuck-core`, `toml`, `serde_json`, `walkdir` |
-| `unfuck-constraints` | Data-driven constraint evaluation (`RuntimeVersion`, `PortAvailable`, `ServiceRunning`, `MemoryMin`, `OsMatch`, `ArchMatch`, `EnvVarSet`). Evaluates constraints against machine state without ad-hoc `if` checks. | `unfuck-core`, `semver`, `serde` |
-| `unfuck-graph` | Dependency and causality graph built on `petgraph`. Connects projects, requirements, capabilities, constraints, and evidence nodes to trace root causes. | `unfuck-core`, `unfuck-constraints`, `petgraph` |
-| `unfuck-predictor` | Deterministic failure prediction. Identifies runtime incompatibilities, port collisions, missing services, and configuration gaps before execution. | `unfuck-core`, `unfuck-constraints`, `unfuck-graph` |
-| `unfuck-diagnosis` | Root-cause analysis. Traces causal dependency chains back to the earliest violated invariant, producing structured explanations without LLMs. | `unfuck-core`, `unfuck-predictor`, `unfuck-graph` |
-| `unfuck-verifier` | Non-destructive verification engine. Validates that project requirements, runtime versions, ports, and services are satisfied. | `unfuck-core`, `unfuck-constraints`, `unfuck-scanner`, `unfuck-project` |
-| `unfuck` (CLI) | Top-level CLI binary and library. Implements `unfuck`, `scan`, `predict`, `explain`, `verify`, with human formatting and first-class JSON output. | All workspace crates, `clap`, `colored` |
+| `concord-core` | Canonical Intermediate Representation (IR), `Evidence`, `EvidenceSource`, `Confidence`, and `ConcordError`. | `serde`, `semver`, `thiserror` |
+| `concord-scanner` | Deterministic Linux machine inspection. Parses `/proc/net/tcp` for listening ports, probes `/proc/[pid]/fd` for process attribution, checks `/etc/os-release`, queries PATH for runtimes, and inspects Docker / PostgreSQL. | `concord-core`, `sysinfo`, `serde` |
+| `concord-project` | Repository signal discovery. Parses `package.json`, `bun.lock`, `pyproject.toml`, `requirements.txt`, `Dockerfile`, `compose.yaml`, `.nvmrc`, `.python-version`, `.tool-versions`, and `.env.example`. | `concord-core`, `toml`, `serde_json`, `walkdir` |
+| `concord-constraints` | Data-driven constraint evaluation (`RuntimeVersion`, `PortAvailable`, `ServiceRunning`, `MemoryMin`, `OsMatch`, `ArchMatch`, `EnvVarSet`). Evaluates constraints against machine state without ad-hoc `if` checks. | `concord-core`, `semver`, `serde` |
+| `concord-graph` | Dependency and causality graph built on `petgraph`. Connects projects, requirements, capabilities, constraints, and evidence nodes to trace root causes. | `concord-core`, `concord-constraints`, `petgraph` |
+| `concord-predictor` | Deterministic failure prediction. Identifies runtime incompatibilities, port collisions, missing services, and configuration gaps before execution. | `concord-core`, `concord-constraints`, `concord-graph` |
+| `concord-diagnosis` | Root-cause analysis. Traces causal dependency chains back to the earliest violated invariant, producing structured explanations without LLMs. | `concord-core`, `concord-predictor`, `concord-graph` |
+| `concord-verifier` | Non-destructive verification engine. Validates that project requirements, runtime versions, ports, and services are satisfied. | `concord-core`, `concord-constraints`, `concord-scanner`, `concord-project` |
+| `concord` (CLI) | Top-level CLI binary and library. Implements `concord`, `scan`, `predict`, `explain`, `verify`, with human formatting and first-class JSON output. | All workspace crates, `clap`, `colored` |
 
 ---
 
 ## 3. Data Flow & Provenance
 
-Every observation in UNFUCK is backed by explicit evidence:
+Every observation in CONCORD is backed by explicit evidence:
 
 ```text
 Evidence
@@ -84,7 +84,7 @@ if python_version < 3.11 {
 }
 ```
 
-UNFUCK translates project requirements into declarative `Constraint` records:
+CONCORD translates project requirements into declarative `Constraint` records:
 ```rust
 Constraint::RuntimeVersion {
     runtime: "python",
@@ -102,7 +102,7 @@ The evaluator matches the constraint against the `MachineCapability` model, yiel
 
 ## 4. Root-Cause Analysis & Causality
 
-When a constraint is violated, `unfuck-graph` traverses the dependency graph to construct an ordered causal chain:
+When a constraint is violated, `concord-graph` traverses the dependency graph to construct an ordered causal chain:
 
 ```text
 Host machine state: Python 3.10.12 at /usr/bin/python3
@@ -117,7 +117,7 @@ Violated invariant: python.version satisfies >= 3.11
 Downstream impact: python toolchain cannot initialize; build and runtime will fail
 ```
 
-This ensures that UNFUCK explains **why** a project will fail at the earliest point of divergence, rather than merely reporting the symptom when a process crashes.
+This ensures that CONCORD explains **why** a project will fail at the earliest point of divergence, rather than merely reporting the symptom when a process crashes.
 
 ---
 
@@ -128,5 +128,5 @@ The Phase 1 foundation is designed to host future planned systems without archit
 - **Repair Planner (Phase 2)**: DAG-based minimal repair planner.
 - **Simulation Engine (Phase 2)**: Counterfactual environment simulation without machine mutation.
 - **Transactional Execution & Rollback (Phase 2)**: Snapshots, filesystem transactions, and automated rollbacks.
-- **Environment Reproducibility (Phase 3)**: Generation of `unfuck.lock`, Dockerfile, and devcontainer environments.
+- **Environment Reproducibility (Phase 3)**: Generation of `concord.lock`, Dockerfile, and devcontainer environments.
 - **Drift Detection & Bisect (Phase 3)**: Historical failure database and git-aware regression bisecting.

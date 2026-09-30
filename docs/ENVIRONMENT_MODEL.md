@@ -1,6 +1,6 @@
-# UNFUCK Environment Model Specification
+# CONCORD Environment Model Specification
 
-This document specifies the canonical Intermediate Representation (IR), Evidence Model, and Graph Representation used across UNFUCK.
+This document specifies the canonical Intermediate Representation (IR), Evidence Model, and Graph Representation used across CONCORD.
 
 ---
 
@@ -138,7 +138,7 @@ pub enum Constraint {
 }
 ```
 
-Constraints are evaluated against `MachineCapability` by `unfuck-constraints`, producing `EvaluatedConstraint` with status:
+Constraints are evaluated against `MachineCapability` by `concord-constraints`, producing `EvaluatedConstraint` with status:
 - `Satisfied`
 - `Violated { reason, root_cause_hint }`
 - `Unknown { reason }`
