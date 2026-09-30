@@ -1,6 +1,8 @@
 use concord_core::evidence::Evidence;
 use concord_core::ir::{ToolKind, ToolScope};
 use concord_core::version::VersionConstraint;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// Declarative environment constraint.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
