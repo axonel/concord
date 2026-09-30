@@ -1,6 +1,6 @@
 use concord::{execute_pipeline, ConcordReport};
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use tempfile::tempdir;
 
 /// Validate that a serialized ConcordReport JSON adheres strictly to the contract schema.
@@ -268,26 +268,25 @@ endif()
 }
 
 #[test]
-fn test_real_world_repository_adversarial_benchmarks() {
+fn test_fixture_adversarial_benchmarks() {
+    let fixtures_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
     let supported_repos = [
-        "/home/roonakyadav/Projects/concord-tests/dpdk",
-        "/home/roonakyadav/Projects/concord-tests/plane",
-        "/home/roonakyadav/Projects/concord-tests/immich",
-        "/home/roonakyadav/Projects/concord-tests/libgit2",
-        "/home/roonakyadav/Projects/cutlass",
-        "/home/roonakyadav/Projects/pliron",
+        "healthy-node-app",
+        "healthy-python-app",
+        "docker-postgres-app",
+        "fixture-anyof-satisfied",
+        "fixture-build-system-compiler",
+        "duplicate-runtime-sources",
     ];
 
     let mut tested_count = 0;
-    for repo_path_str in supported_repos {
-        let repo_path = Path::new(repo_path_str);
-        if !repo_path.exists() {
-            continue;
-        }
+    for repo_name in supported_repos {
+        let repo_path = fixtures_root.join(repo_name);
+        assert!(repo_path.is_dir(), "missing benchmark fixture: {}", repo_path.display());
 
         tested_count += 1;
-        let output = execute_pipeline(repo_path)
-            .unwrap_or_else(|e| panic!("execute_pipeline failed on {}: {}", repo_path_str, e));
+        let output = execute_pipeline(&repo_path)
+            .unwrap_or_else(|e| panic!("execute_pipeline failed on {}: {}", repo_path.display(), e));
 
         let report = ConcordReport {
             project: output.env_model.project,
@@ -300,9 +299,9 @@ fn test_real_world_repository_adversarial_benchmarks() {
 
         // Assert JSON serializability and schema invariants
         let json_str = serde_json::to_string(&report)
-            .unwrap_or_else(|e| panic!("failed to serialize JSON for {}: {}", repo_path_str, e));
+            .unwrap_or_else(|e| panic!("failed to serialize JSON for {}: {}", repo_path.display(), e));
         let json_val: serde_json::Value = serde_json::from_str(&json_str)
-            .unwrap_or_else(|e| panic!("failed to deserialize JSON for {}: {}", repo_path_str, e));
+            .unwrap_or_else(|e| panic!("failed to deserialize JSON for {}: {}", repo_path.display(), e));
 
         assert_json_contract_validity(&json_val);
         assert!(
@@ -311,14 +310,11 @@ fn test_real_world_repository_adversarial_benchmarks() {
                 .unwrap()
                 .is_empty(),
             "{} must discover at least one constraint",
-            repo_path_str
+            repo_path.display()
         );
     }
 
-    assert!(
-        tested_count >= 5,
-        "Must test at least 5 benchmark repos in this test environment"
-    );
+    assert_eq!(tested_count, supported_repos.len());
     println!(
         "Verified {} real-world benchmark repositories",
         tested_count
