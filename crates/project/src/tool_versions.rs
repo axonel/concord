@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use toml::Value;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
-use unfuck_core::VersionConstraint;
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
+use concord_core::VersionConstraint;
 
 pub struct ToolVersionsDiscovery {
     pub requirements: Vec<ProjectRequirement>,

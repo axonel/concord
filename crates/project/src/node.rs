@@ -1,10 +1,10 @@
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ProjectRequirement, RequirementKind};
-use unfuck_core::Confidence;
-use unfuck_core::VersionConstraint;
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ProjectRequirement, RequirementKind};
+use concord_core::Confidence;
+use concord_core::VersionConstraint;
 
 pub struct NodeDiscovery {
     pub is_node: bool,
@@ -261,7 +261,7 @@ pub fn analyze_node(root: &Path) -> NodeDiscovery {
                             if let Some(major) = extract_major_version(types_node) {
                                 has_node_req = true;
                                 let ev = Evidence::new(
-                                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                                    concord_core::evidence::EvidenceSource::RepositoryFile {
                                         path: PathBuf::from("package.json"),
                                         line: None,
                                         detail: Some(format!("@types/node: {}", types_node)),
@@ -291,7 +291,7 @@ pub fn analyze_node(root: &Path) -> NodeDiscovery {
                     // Baseline Node requirement if package.json exists
                     if !has_node_req && requirements.iter().all(|r| r.name != "node") {
                         let ev = Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                            concord_core::evidence::EvidenceSource::RepositoryFile {
                                 path: PathBuf::from("package.json"),
                                 line: None,
                                 detail: Some("package.json present".to_string()),
@@ -400,7 +400,7 @@ pub fn analyze_node(root: &Path) -> NodeDiscovery {
                 }
                 Err(e) => {
                     evidence.push(Evidence::new(
-                        unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                        concord_core::evidence::EvidenceSource::RepositoryFile {
                             path: PathBuf::from("package.json"),
                             line: Some(e.line()),
                             detail: Some(e.to_string()),
@@ -412,7 +412,7 @@ pub fn analyze_node(root: &Path) -> NodeDiscovery {
             },
             Err(e) => {
                 evidence.push(Evidence::new(
-                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                    concord_core::evidence::EvidenceSource::RepositoryFile {
                         path: PathBuf::from("package.json"),
                         line: None,
                         detail: Some(e.to_string()),

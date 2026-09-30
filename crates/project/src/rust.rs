@@ -2,11 +2,11 @@ use std::cmp::Ordering;
 use std::fs;
 use std::path::{Path, PathBuf};
 use toml::Value;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ProjectRequirement, RequirementKind};
-use unfuck_core::version::{compare_version_components, parse_version_components};
-use unfuck_core::Confidence;
-use unfuck_core::VersionConstraint;
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ProjectRequirement, RequirementKind};
+use concord_core::version::{compare_version_components, parse_version_components};
+use concord_core::Confidence;
+use concord_core::VersionConstraint;
 
 pub struct RustDiscovery {
     pub is_rust: bool,
@@ -132,7 +132,7 @@ pub fn analyze_rust(root: &Path) -> RustDiscovery {
                     } else {
                         // General Rust runtime requirement
                         let ev = Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                            concord_core::evidence::EvidenceSource::RepositoryFile {
                                 path: PathBuf::from("Cargo.toml"),
                                 line: None,
                                 detail: Some("Cargo project configuration present".to_string()),
@@ -185,7 +185,7 @@ pub fn analyze_rust(root: &Path) -> RustDiscovery {
                 }
                 Err(e) => {
                     evidence.push(Evidence::new(
-                        unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                        concord_core::evidence::EvidenceSource::RepositoryFile {
                             path: PathBuf::from("Cargo.toml"),
                             line: None,
                             detail: Some(e.to_string()),
@@ -197,7 +197,7 @@ pub fn analyze_rust(root: &Path) -> RustDiscovery {
             },
             Err(e) => {
                 evidence.push(Evidence::new(
-                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                    concord_core::evidence::EvidenceSource::RepositoryFile {
                         path: PathBuf::from("Cargo.toml"),
                         line: None,
                         detail: Some(e.to_string()),

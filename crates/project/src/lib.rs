@@ -12,11 +12,11 @@ pub mod tool_versions;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::error::Result;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ProjectComponent, ProjectManifest, ProjectRequirement, RequirementKind};
-use unfuck_core::Confidence;
-pub use unfuck_core::VersionConstraint;
+use concord_core::error::Result;
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ProjectComponent, ProjectManifest, ProjectRequirement, RequirementKind};
+use concord_core::Confidence;
+pub use concord_core::VersionConstraint;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum EntityKey {
@@ -101,19 +101,19 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                     }
                     Err(err) => {
                         let p1 = match &existing.evidence.source {
-                            unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                            concord_core::evidence::EvidenceSource::RepositoryFile {
                                 path, ..
                             } => path.clone(),
                             _ => PathBuf::from("config1"),
                         };
                         let p2 = match &req.evidence.source {
-                            unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                            concord_core::evidence::EvidenceSource::RepositoryFile {
                                 path, ..
                             } => path.clone(),
                             _ => PathBuf::from("config2"),
                         };
                         let ev = Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::MultiSourceConflict {
+                            concord_core::evidence::EvidenceSource::MultiSourceConflict {
                                 summary: format!(
                                     "Contradictory {} version requirements: '{}' vs '{}'",
                                     name, c1, c2
@@ -161,21 +161,21 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                             Err(err) => {
                                 is_conflict = true;
                                 let p1 = match &existing.evidence.source {
-                                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                                    concord_core::evidence::EvidenceSource::RepositoryFile {
                                         path,
                                         ..
                                     } => path.clone(),
                                     _ => PathBuf::from("config1"),
                                 };
                                 let p2 = match &req.evidence.source {
-                                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                                    concord_core::evidence::EvidenceSource::RepositoryFile {
                                         path,
                                         ..
                                     } => path.clone(),
                                     _ => PathBuf::from("config2"),
                                 };
                                 let ev = Evidence::new(
-                                    unfuck_core::evidence::EvidenceSource::MultiSourceConflict {
+                                    concord_core::evidence::EvidenceSource::MultiSourceConflict {
                                         summary: format!(
                                             "Contradictory {} package manager version requirements: '{}' vs '{}'",
                                             name, v1, v2
@@ -235,13 +235,13 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                     },
                 ) => {
                     let merged_scope = match (s1, s2) {
-                        (unfuck_core::ir::ToolScope::RequiredForBuild, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForBuild) => {
-                            unfuck_core::ir::ToolScope::RequiredForBuild
+                        (concord_core::ir::ToolScope::RequiredForBuild, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForBuild) => {
+                            concord_core::ir::ToolScope::RequiredForBuild
                         }
-                        (unfuck_core::ir::ToolScope::RequiredForTask, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForTask) => {
-                            unfuck_core::ir::ToolScope::RequiredForTask
+                        (concord_core::ir::ToolScope::RequiredForTask, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForTask) => {
+                            concord_core::ir::ToolScope::RequiredForTask
                         }
                         _ => *s1,
                     };
@@ -315,13 +315,13 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                     },
                 ) => {
                     let merged_scope = match (s1, s2) {
-                        (unfuck_core::ir::ToolScope::RequiredForBuild, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForBuild) => {
-                            unfuck_core::ir::ToolScope::RequiredForBuild
+                        (concord_core::ir::ToolScope::RequiredForBuild, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForBuild) => {
+                            concord_core::ir::ToolScope::RequiredForBuild
                         }
-                        (unfuck_core::ir::ToolScope::RequiredForTask, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForTask) => {
-                            unfuck_core::ir::ToolScope::RequiredForTask
+                        (concord_core::ir::ToolScope::RequiredForTask, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForTask) => {
+                            concord_core::ir::ToolScope::RequiredForTask
                         }
                         _ => *s1,
                     };
@@ -357,9 +357,9 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                     },
                 ) => {
                     let merged_scope = match (s1, s2) {
-                        (unfuck_core::ir::ToolScope::RequiredForBuild, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForBuild) => {
-                            unfuck_core::ir::ToolScope::RequiredForBuild
+                        (concord_core::ir::ToolScope::RequiredForBuild, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForBuild) => {
+                            concord_core::ir::ToolScope::RequiredForBuild
                         }
                         _ => *s1,
                     };
@@ -400,17 +400,17 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                         }
                     }
                     let merged_scope = match (s1, s2) {
-                        (unfuck_core::ir::ToolScope::RequiredForProject, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForProject) => {
-                            unfuck_core::ir::ToolScope::RequiredForProject
+                        (concord_core::ir::ToolScope::RequiredForProject, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForProject) => {
+                            concord_core::ir::ToolScope::RequiredForProject
                         }
-                        (unfuck_core::ir::ToolScope::RequiredForBuild, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForBuild) => {
-                            unfuck_core::ir::ToolScope::RequiredForBuild
+                        (concord_core::ir::ToolScope::RequiredForBuild, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForBuild) => {
+                            concord_core::ir::ToolScope::RequiredForBuild
                         }
-                        (unfuck_core::ir::ToolScope::RequiredForTask, _)
-                        | (_, unfuck_core::ir::ToolScope::RequiredForTask) => {
-                            unfuck_core::ir::ToolScope::RequiredForTask
+                        (concord_core::ir::ToolScope::RequiredForTask, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForTask) => {
+                            concord_core::ir::ToolScope::RequiredForTask
                         }
                         _ => *s1,
                     };
@@ -444,8 +444,8 @@ struct DirAnalysis {
     requirements: Vec<ProjectRequirement>,
     declared_ports: Vec<u16>,
     env_vars: Vec<String>,
-    env_var_specs: Vec<unfuck_core::ir::EnvVarSpec>,
-    compose_projects: Vec<unfuck_core::ir::ComposeProjectSpec>,
+    env_var_specs: Vec<concord_core::ir::EnvVarSpec>,
+    compose_projects: Vec<concord_core::ir::ComposeProjectSpec>,
     docker_used: bool,
     evidence: Vec<Evidence>,
 }
@@ -542,19 +542,19 @@ fn analyze_dir(dir: &Path) -> DirAnalysis {
 /// Analyze a project repository deterministically and produce a structured manifest.
 pub fn analyze_project(root: &Path) -> Result<ProjectManifest> {
     if !root.exists() {
-        return Err(unfuck_core::UnfuckError::ProjectAnalysis(format!(
+        return Err(concord_core::ConcordError::ProjectAnalysis(format!(
             "Target path '{}' does not exist",
             root.display()
         )));
     }
     if !root.is_dir() {
-        return Err(unfuck_core::UnfuckError::ProjectAnalysis(format!(
+        return Err(concord_core::ConcordError::ProjectAnalysis(format!(
             "Target path '{}' is not a directory",
             root.display()
         )));
     }
 
-    let root_buf = root.canonicalize().map_err(unfuck_core::UnfuckError::Io)?;
+    let root_buf = root.canonicalize().map_err(concord_core::ConcordError::Io)?;
 
     // 1. Analyze root directory
     let root_analysis = analyze_dir(&root_buf);
