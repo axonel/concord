@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ProjectRequirement, RequirementKind};
-use unfuck_core::Confidence;
-use unfuck_core::VersionConstraint;
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ProjectRequirement, RequirementKind};
+use concord_core::Confidence;
+use concord_core::VersionConstraint;
 
 pub struct GoDiscovery {
     pub is_go: bool,
@@ -81,7 +81,7 @@ pub fn analyze_go(root: &Path) -> GoDiscovery {
 
                 if !found_ver {
                     let ev = Evidence::new(
-                        unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                        concord_core::evidence::EvidenceSource::RepositoryFile {
                             path: PathBuf::from("go.mod"),
                             line: None,
                             detail: Some(
@@ -104,7 +104,7 @@ pub fn analyze_go(root: &Path) -> GoDiscovery {
             }
             Err(e) => {
                 evidence.push(Evidence::new(
-                    unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                    concord_core::evidence::EvidenceSource::RepositoryFile {
                         path: PathBuf::from("go.mod"),
                         line: None,
                         detail: Some(e.to_string()),

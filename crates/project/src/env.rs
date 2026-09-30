@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{EnvVarCategory, EnvVarSpec, ProjectRequirement, RequirementKind};
-use unfuck_core::Confidence;
+use concord_core::evidence::Evidence;
+use concord_core::ir::{EnvVarCategory, EnvVarSpec, ProjectRequirement, RequirementKind};
+use concord_core::Confidence;
 
 pub struct EnvDiscovery {
     pub env_vars: Vec<String>,
@@ -229,7 +229,7 @@ pub fn analyze_env(root: &Path) -> EnvDiscovery {
                     // Only emit ProjectRequirement for strictly required env vars
                     if is_strictly_required {
                         let ev = Evidence::new(
-                            unfuck_core::evidence::EvidenceSource::RepositoryFile {
+                            concord_core::evidence::EvidenceSource::RepositoryFile {
                                 path: PathBuf::from(filename),
                                 line: Some(line_num),
                                 detail: Some(format!("Declared in {}", filename)),

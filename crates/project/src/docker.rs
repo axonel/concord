@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{
+use concord_core::evidence::Evidence;
+use concord_core::ir::{
     ComposeProjectSpec, ComposeServiceSpec, ProjectRequirement, RequirementKind,
 };
-use unfuck_core::VersionConstraint;
+use concord_core::VersionConstraint;
 use walkdir::WalkDir;
 
 pub struct DockerDiscovery {
@@ -197,7 +197,7 @@ fn parse_compose_file(compose_path: &Path, root: &Path) -> Option<ComposeProject
 
     let mut project_missing_env_files: Vec<PathBuf> = Vec::new();
     let mut project_referenced_env_files: Vec<PathBuf> = Vec::new();
-    let mut project_env_templates: Vec<unfuck_core::ir::EnvFileTemplate> = Vec::new();
+    let mut project_env_templates: Vec<concord_core::ir::EnvFileTemplate> = Vec::new();
     let mut project_unresolved_vars: Vec<String> = Vec::new();
     let mut known_env_keys: HashSet<String> = HashSet::new();
 
@@ -232,7 +232,7 @@ fn parse_compose_file(compose_path: &Path, root: &Path) -> Option<ComposeProject
                         .strip_prefix(root)
                         .unwrap_or(&cand_abs)
                         .to_path_buf();
-                    let match_entry = unfuck_core::ir::EnvFileTemplate {
+                    let match_entry = concord_core::ir::EnvFileTemplate {
                         missing_path: proj_rel,
                         template_path: cand_rel,
                     };
@@ -312,7 +312,7 @@ fn parse_compose_file(compose_path: &Path, root: &Path) -> Option<ComposeProject
                             .strip_prefix(root)
                             .unwrap_or(&cand_abs)
                             .to_path_buf();
-                        let match_entry = unfuck_core::ir::EnvFileTemplate {
+                        let match_entry = concord_core::ir::EnvFileTemplate {
                             missing_path: proj_rel,
                             template_path: cand_rel,
                         };

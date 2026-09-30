@@ -1,10 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
-use unfuck_core::evidence::{Evidence, EvidenceSource};
-use unfuck_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
-use unfuck_core::Confidence;
-use unfuck_core::VersionConstraint;
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
+use concord_core::Confidence;
+use concord_core::VersionConstraint;
 
 #[derive(Debug, Clone)]
 pub struct CMakeDiscovery {
