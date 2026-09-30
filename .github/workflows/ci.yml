@@ -38,4 +38,4 @@ jobs:
         run: cargo build --release --verbose
 
       - name: Run Smoke Test on Repository
-        run: ./target/release/unfuck .
+        run: ./target/release/concord .

@@ -1,13 +1,13 @@
 #!/bin/sh
-# UNFUCK Installer
-# One-command installer for UNFUCK: Development Environment Engine
-# Repository: https://github.com/axonel/unfuck
+# CONCORD Installer
+# One-command installer for CONCORD: Development Environment Engine
+# Repository: https://github.com/axonel/concord
 
 set -eu
 
-REPO="${UNFUCK_REPO:-axonel/unfuck}"
+REPO="${CONCORD_REPO:-axonel/concord}"
 DEFAULT_VERSION="v0.2.1"
-INSTALL_DIR="${UNFUCK_INSTALL_DIR:-$HOME/.local/bin}"
+INSTALL_DIR="${CONCORD_INSTALL_DIR:-$HOME/.local/bin}"
 
 # ANSI color codes
 BOLD='\033[1m'
@@ -19,7 +19,7 @@ RESET='\033[0m'
 
 print_banner() {
     printf "${CYAN}${BOLD}"
-    printf "UNFUCK — Development Environment Resolution Engine\n"
+    printf "CONCORD — Development Environment Resolution Engine\n"
     printf "──────────────────────────────────────────────────\n"
     printf "${RESET}"
 }
@@ -45,10 +45,10 @@ detect_os() {
             echo "linux"
             ;;
         Darwin|darwin)
-            error "macOS is not yet supported in this release. UNFUCK currently targets Linux development environments."
+            error "macOS is not yet supported in this release. CONCORD currently targets Linux development environments."
             ;;
         *)
-            error "Unsupported operating system: $OS. UNFUCK requires Linux."
+            error "Unsupported operating system: $OS. CONCORD requires Linux."
             ;;
     esac
 }
@@ -85,8 +85,8 @@ download_file() {
 
 # 4. Resolve Target Version
 resolve_version() {
-    if [ -n "${UNFUCK_VERSION:-}" ]; then
-        echo "$UNFUCK_VERSION"
+    if [ -n "${CONCORD_VERSION:-}" ]; then
+        echo "$CONCORD_VERSION"
         return
     fi
 
@@ -146,12 +146,12 @@ main() {
     info "Target version:   ${VERSION}"
     info "Install directory: ${INSTALL_DIR}"
 
-    ARCHIVE_NAME="unfuck-${VERSION}-${OS}-${ARCH}.tar.gz"
-    BASE_URL="${UNFUCK_BASE_URL:-https://github.com/${REPO}/releases/download/${VERSION}}"
+    ARCHIVE_NAME="concord-${VERSION}-${OS}-${ARCH}.tar.gz"
+    BASE_URL="${CONCORD_BASE_URL:-https://github.com/${REPO}/releases/download/${VERSION}}"
     RELEASE_URL="${BASE_URL}/${ARCHIVE_NAME}"
     CHECKSUM_URL="${RELEASE_URL}.sha256"
 
-    TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t 'unfuck-install')"
+    TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t 'concord-install')"
     trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
     ARCHIVE_PATH="${TMP_DIR}/${ARCHIVE_NAME}"
@@ -180,33 +180,33 @@ main() {
     info "Extracting binary..."
     tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
 
-    EXTRACTED_BIN="${TMP_DIR}/unfuck-${VERSION}-${OS}-${ARCH}/unfuck"
+    EXTRACTED_BIN="${TMP_DIR}/concord-${VERSION}-${OS}-${ARCH}/concord"
     if [ ! -f "$EXTRACTED_BIN" ]; then
         # Fallback if tar extracted directly to root
-        EXTRACTED_BIN="${TMP_DIR}/unfuck"
+        EXTRACTED_BIN="${TMP_DIR}/concord"
     fi
 
     if [ ! -f "$EXTRACTED_BIN" ]; then
-        error "Extracted archive did not contain 'unfuck' binary."
+        error "Extracted archive did not contain 'concord' binary."
     fi
 
     # Verify write permissions and install atomically
     mkdir -p "$INSTALL_DIR" 2>/dev/null || error "Cannot create installation directory '$INSTALL_DIR'. Check permissions."
     if [ ! -w "$INSTALL_DIR" ]; then
-        error "Installation directory '$INSTALL_DIR' is not writable. Check permissions or configure UNFUCK_INSTALL_DIR."
+        error "Installation directory '$INSTALL_DIR' is not writable. Check permissions or configure CONCORD_INSTALL_DIR."
     fi
 
-    TMP_INSTALL_FILE="${INSTALL_DIR}/.unfuck.tmp.$$"
+    TMP_INSTALL_FILE="${INSTALL_DIR}/.concord.tmp.$$"
     cp "$EXTRACTED_BIN" "$TMP_INSTALL_FILE"
     chmod +x "$TMP_INSTALL_FILE"
-    mv -f "$TMP_INSTALL_FILE" "${INSTALL_DIR}/unfuck"
+    mv -f "$TMP_INSTALL_FILE" "${INSTALL_DIR}/concord"
 
-    info "Successfully installed unfuck to ${INSTALL_DIR}/unfuck"
+    info "Successfully installed concord to ${INSTALL_DIR}/concord"
 
     # Verify execution
-    INSTALLED_VERSION="$("${INSTALL_DIR}/unfuck" --version 2>/dev/null || true)"
+    INSTALLED_VERSION="$("${INSTALL_DIR}/concord" --version 2>/dev/null || true)"
     if [ -z "$INSTALLED_VERSION" ]; then
-        error "Binary installed but failed to execute: ${INSTALL_DIR}/unfuck --version"
+        error "Binary installed but failed to execute: ${INSTALL_DIR}/concord --version"
     fi
 
     printf "${GREEN}${BOLD}✓ Verified: %s${RESET}\n\n" "$INSTALLED_VERSION"
@@ -218,7 +218,7 @@ main() {
             ;;
         *)
             warn "${INSTALL_DIR} is NOT currently in your PATH environment variable."
-            printf "\nTo make 'unfuck' available from any directory, add this to your shell profile:\n"
+            printf "\nTo make 'concord' available from any directory, add this to your shell profile:\n"
             printf "  ${BOLD}export PATH=\"%s:\$PATH\"${RESET}\n\n" "$INSTALL_DIR"
             printf "For bash (~/.bashrc):\n"
             printf "  echo 'export PATH=\"%s:\$PATH\"' >> ~/.bashrc && source ~/.bashrc\n\n" "$INSTALL_DIR"
@@ -229,8 +229,8 @@ main() {
             ;;
     esac
 
-    printf "Run UNFUCK on your repository:\n"
-    printf "  ${CYAN}${BOLD}unfuck .${RESET}\n"
+    printf "Run CONCORD on your repository:\n"
+    printf "  ${CYAN}${BOLD}concord .${RESET}\n"
 }
 
 main "$@"
