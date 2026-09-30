@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{ToolKind, ToolObservation};
 use concord_core::Confidence;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn resolve_in_path(binary: &str, path_entries: &[PathBuf]) -> Option<PathBuf> {
     for dir in path_entries {

@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::Runtime;
 use concord_core::Confidence;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 struct RuntimeProbe {
     name: &'static str,

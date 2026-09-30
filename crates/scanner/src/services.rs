@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{PortInfo, PortState, Service, ServiceStatus};
 use concord_core::Confidence;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// Probe Docker service status.
 pub fn probe_docker(path_entries: &[PathBuf]) -> Service {
