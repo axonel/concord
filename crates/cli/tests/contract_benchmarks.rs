@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
-use unfuck::{execute_pipeline, UnfuckReport};
+use concord::{execute_pipeline, ConcordReport};
 
-/// Validate that a serialized UnfuckReport JSON adheres strictly to the contract schema.
+/// Validate that a serialized ConcordReport JSON adheres strictly to the contract schema.
 fn assert_json_contract_validity(json: &serde_json::Value) {
     assert!(json.is_object(), "Report must be a JSON object");
 
@@ -170,7 +170,7 @@ edition = "2024"
     fs::write(dir.path().join("Cargo.toml"), cargo_toml).unwrap();
 
     let output = execute_pipeline(dir.path()).expect("execute_pipeline on rust 2024 fixture");
-    let report = UnfuckReport {
+    let report = ConcordReport {
         project: output.env_model.project,
         machine: output.env_model.machine,
         evaluated_constraints: output.evaluated_constraints,
@@ -206,7 +206,7 @@ find_package(CUDAToolkit REQUIRED)
     fs::write(dir.path().join("CMakeLists.txt"), cmake_content).unwrap();
 
     let output = execute_pipeline(dir.path()).expect("execute_pipeline on cuda cmake fixture");
-    let report = UnfuckReport {
+    let report = ConcordReport {
         project: output.env_model.project,
         machine: output.env_model.machine,
         evaluated_constraints: output.evaluated_constraints,
@@ -247,7 +247,7 @@ endif()
     fs::write(dir.path().join("CMakeLists.txt"), cmake_content).unwrap();
 
     let output = execute_pipeline(dir.path()).expect("execute_pipeline on anyof fixture");
-    let report = UnfuckReport {
+    let report = ConcordReport {
         project: output.env_model.project,
         machine: output.env_model.machine,
         evaluated_constraints: output.evaluated_constraints,
@@ -270,10 +270,10 @@ endif()
 #[test]
 fn test_real_world_repository_adversarial_benchmarks() {
     let supported_repos = [
-        "/home/roonakyadav/Projects/unfuck-tests/dpdk",
-        "/home/roonakyadav/Projects/unfuck-tests/plane",
-        "/home/roonakyadav/Projects/unfuck-tests/immich",
-        "/home/roonakyadav/Projects/unfuck-tests/libgit2",
+        "/home/roonakyadav/Projects/concord-tests/dpdk",
+        "/home/roonakyadav/Projects/concord-tests/plane",
+        "/home/roonakyadav/Projects/concord-tests/immich",
+        "/home/roonakyadav/Projects/concord-tests/libgit2",
         "/home/roonakyadav/Projects/cutlass",
         "/home/roonakyadav/Projects/pliron",
     ];
@@ -289,7 +289,7 @@ fn test_real_world_repository_adversarial_benchmarks() {
         let output = execute_pipeline(repo_path)
             .unwrap_or_else(|e| panic!("execute_pipeline failed on {}: {}", repo_path_str, e));
 
-        let report = UnfuckReport {
+        let report = ConcordReport {
             project: output.env_model.project,
             machine: output.env_model.machine,
             evaluated_constraints: output.evaluated_constraints,
