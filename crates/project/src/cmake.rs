@@ -1,10 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::path::{Path, PathBuf};
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
+use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct CMakeDiscovery {

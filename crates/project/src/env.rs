@@ -1,9 +1,9 @@
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use concord_core::evidence::Evidence;
 use concord_core::ir::{EnvVarCategory, EnvVarSpec, ProjectRequirement, RequirementKind};
 use concord_core::Confidence;
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct EnvDiscovery {
     pub env_vars: Vec<String>,

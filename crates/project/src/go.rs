@@ -1,9 +1,9 @@
-use std::fs;
-use std::path::{Path, PathBuf};
 use concord_core::evidence::Evidence;
 use concord_core::ir::{ProjectRequirement, RequirementKind};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 pub struct GoDiscovery {
     pub is_go: bool,

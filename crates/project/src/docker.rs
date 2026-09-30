@@ -1,11 +1,11 @@
-use std::collections::HashSet;
-use std::fs;
-use std::path::{Path, PathBuf};
 use concord_core::evidence::Evidence;
 use concord_core::ir::{
     ComposeProjectSpec, ComposeServiceSpec, ProjectRequirement, RequirementKind,
 };
 use concord_core::VersionConstraint;
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 pub struct DockerDiscovery {
