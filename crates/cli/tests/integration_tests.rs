@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use concord_constraints::evaluator::evaluate_all;
 use concord_core::ir::{EnvironmentModel, PortInfo, PortState};
 use concord_core::Confidence;
@@ -8,6 +7,7 @@ use concord_predictor::{predict_failures, PredictionCategory};
 use concord_project::analyze_project;
 use concord_scanner::scan_machine;
 use concord_verifier::verify_environment;
+use std::path::PathBuf;
 
 fn fixtures_dir() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

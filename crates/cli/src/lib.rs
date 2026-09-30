@@ -1,7 +1,5 @@
 pub mod format;
 
-use serde::Serialize;
-use std::path::Path;
 use concord_constraints::evaluator::evaluate_project;
 use concord_constraints::model::EvaluatedConstraint;
 use concord_core::ir::{EnvironmentModel, MachineCapability, ProjectManifest};
@@ -10,6 +8,8 @@ use concord_graph::EnvironmentGraph;
 use concord_predictor::{predict_failures, Prediction};
 use concord_project::analyze_project;
 use concord_verifier::{verify_environment, VerificationReport};
+use serde::Serialize;
+use std::path::Path;
 
 #[derive(Serialize)]
 pub struct ConcordReport {

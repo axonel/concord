@@ -1,7 +1,7 @@
+use concord::{execute_pipeline, ConcordReport};
 use std::fs;
 use std::path::Path;
 use tempfile::tempdir;
-use concord::{execute_pipeline, ConcordReport};
 
 /// Validate that a serialized ConcordReport JSON adheres strictly to the contract schema.
 fn assert_json_contract_validity(json: &serde_json::Value) {

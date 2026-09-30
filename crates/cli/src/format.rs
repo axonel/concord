@@ -80,7 +80,12 @@ pub fn print_human_summary(
         let local_cnt = project
             .env_var_specs
             .iter()
-            .filter(|s| matches!(s.category, concord_core::ir::EnvVarCategory::ConfiguredLocal))
+            .filter(|s| {
+                matches!(
+                    s.category,
+                    concord_core::ir::EnvVarCategory::ConfiguredLocal
+                )
+            })
             .count();
 
         let mut parts = Vec::new();

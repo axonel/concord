@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
-use std::process::ExitCode;
 use concord::format;
 use concord::{execute_pipeline, ConcordReport};
 use concord_diagnosis::Diagnosis;
 use concord_project::analyze_project;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(
