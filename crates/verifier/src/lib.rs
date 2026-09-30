@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use unfuck_constraints::model::{Constraint, EvaluatedConstraint};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::EnvironmentModel;
+use concord_constraints::model::{Constraint, EvaluatedConstraint};
+use concord_core::evidence::Evidence;
+use concord_core::ir::EnvironmentModel;
 
 /// An individual verification check result.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,11 +102,11 @@ pub fn verify_environment(
         let passed = eval.is_satisfied();
         let message = if passed {
             format!("Requirement satisfied: {}", eval.constraint)
-        } else if let unfuck_constraints::model::ConstraintStatus::Violated { reason, .. } =
+        } else if let concord_constraints::model::ConstraintStatus::Violated { reason, .. } =
             &eval.status
         {
             reason.clone()
-        } else if let unfuck_constraints::model::ConstraintStatus::Unknown { reason } = &eval.status
+        } else if let concord_constraints::model::ConstraintStatus::Unknown { reason } = &eval.status
         {
             format!("Status unknown: {}", reason)
         } else {
@@ -144,8 +144,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use unfuck_constraints::model::{Constraint, ConstraintStatus};
-    use unfuck_core::ir::{MachineCapability, ProjectManifest};
+    use concord_constraints::model::{Constraint, ConstraintStatus};
+    use concord_core::ir::{MachineCapability, ProjectManifest};
 
     #[test]
     fn test_verify_environment_pass_and_fail() {
@@ -195,7 +195,7 @@ mod tests {
         let eval_fail = EvaluatedConstraint {
             constraint: Constraint::RuntimeVersion {
                 runtime: "node".to_string(),
-                constraint: unfuck_core::version::VersionConstraint::parse(">= 20"),
+                constraint: concord_core::version::VersionConstraint::parse(">= 20"),
             },
             status: ConstraintStatus::Violated {
                 reason: "Node not installed".to_string(),

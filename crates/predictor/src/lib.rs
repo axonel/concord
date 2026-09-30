@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use unfuck_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{EnvironmentModel, ToolScope};
-use unfuck_core::Confidence;
+use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
+use concord_core::evidence::Evidence;
+use concord_core::ir::{EnvironmentModel, ToolScope};
+use concord_core::Confidence;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -661,7 +661,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use unfuck_core::ir::{MachineCapability, ProjectManifest};
+    use concord_core::ir::{MachineCapability, ProjectManifest};
 
     #[test]
     fn test_predict_runtime_failure() {
@@ -704,7 +704,7 @@ mod tests {
         let eval = EvaluatedConstraint {
             constraint: Constraint::RuntimeVersion {
                 runtime: "python".to_string(),
-                constraint: unfuck_core::version::VersionConstraint::parse(">= 3.11"),
+                constraint: concord_core::version::VersionConstraint::parse(">= 3.11"),
             },
             status: ConstraintStatus::Violated {
                 reason: "Runtime 'python' is not installed".to_string(),
@@ -764,7 +764,7 @@ mod tests {
         let eval = EvaluatedConstraint {
             constraint: Constraint::PackageManagerVersion {
                 name: "pnpm".to_string(),
-                constraint: Some(unfuck_core::version::VersionConstraint::parse("11.24.0")),
+                constraint: Some(concord_core::version::VersionConstraint::parse("11.24.0")),
             },
             status: ConstraintStatus::Violated {
                 reason: "Package manager 'pnpm' is not installed".to_string(),
@@ -824,9 +824,9 @@ mod tests {
         let eval = EvaluatedConstraint {
             constraint: Constraint::ToolAvailable {
                 name: "terragrunt".to_string(),
-                kind: unfuck_core::ir::ToolKind::DeveloperTool,
-                constraint: Some(unfuck_core::version::VersionConstraint::parse("1.1.1")),
-                scope: unfuck_core::ir::ToolScope::RequiredForTask,
+                kind: concord_core::ir::ToolKind::DeveloperTool,
+                constraint: Some(concord_core::version::VersionConstraint::parse("1.1.1")),
+                scope: concord_core::ir::ToolScope::RequiredForTask,
             },
             status: ConstraintStatus::Violated {
                 reason: "DeveloperTool 'terragrunt' is not installed".to_string(),

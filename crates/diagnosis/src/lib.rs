@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
-use unfuck_constraints::model::Constraint;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::Confidence;
-use unfuck_graph::model::CausalTrace;
-use unfuck_predictor::Prediction;
+use concord_constraints::model::Constraint;
+use concord_core::evidence::Evidence;
+use concord_core::Confidence;
+use concord_graph::model::CausalTrace;
+use concord_predictor::Prediction;
 
 /// Structured root-cause diagnosis explaining why an environment failure will occur.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -215,7 +215,7 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                     .unwrap_or_default();
 
                 let is_version_incompatible = pred.category
-                    == unfuck_predictor::PredictionCategory::SystemLibraryIncompatible
+                    == concord_predictor::PredictionCategory::SystemLibraryIncompatible
                     && pred.title.contains("incompatible");
                 let is_version_unknown = pred.title.contains("version unknown");
 
@@ -603,7 +603,7 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
         }
 
         let is_compose_unresolved = pred.category
-            == unfuck_predictor::PredictionCategory::ComposeConfigMissing
+            == concord_predictor::PredictionCategory::ComposeConfigMissing
             || matches!(&pred.constraint, Constraint::ComposeConfigUnresolved { .. });
 
         let problem_title = if is_compose_unresolved {
@@ -692,7 +692,7 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
 #[cfg(test)]
 mod tests {
     use super::*;
-    use unfuck_predictor::PredictionCategory;
+    use concord_predictor::PredictionCategory;
 
     #[test]
     fn test_diagnosis_generation() {
@@ -703,7 +703,7 @@ mod tests {
             confidence: Confidence::High,
             constraint: Constraint::RuntimeVersion {
                 runtime: "python".to_string(),
-                constraint: unfuck_core::version::VersionConstraint::parse(">= 3.11"),
+                constraint: concord_core::version::VersionConstraint::parse(">= 3.11"),
             },
             affected_components: vec!["python".to_string(), "backend".to_string()],
             project_evidence: None,
@@ -720,8 +720,8 @@ mod tests {
 
     #[test]
     fn test_diagnosis_distinguishes_missing_vs_incompatible_version() {
-        use unfuck_core::ir::ToolScope;
-        use unfuck_core::version::VersionConstraint;
+        use concord_core::ir::ToolScope;
+        use concord_core::version::VersionConstraint;
 
         // 1. Missing library
         let missing_pred = Prediction {
@@ -756,7 +756,7 @@ mod tests {
             affected_components: vec!["libevent".to_string()],
             project_evidence: None,
             machine_evidence: Some(Evidence::new(
-                unfuck_core::evidence::EvidenceSource::DynamicProbe {
+                concord_core::evidence::EvidenceSource::DynamicProbe {
                     target: "pkg-config libevent".to_string(),
                     probe_type: "pkg-config".to_string(),
                     outcome: "version: 1.4.1".to_string(),
@@ -782,7 +782,7 @@ mod tests {
             affected_components: vec!["libevent".to_string()],
             project_evidence: None,
             machine_evidence: Some(Evidence::new(
-                unfuck_core::evidence::EvidenceSource::DirectObservation {
+                concord_core::evidence::EvidenceSource::DirectObservation {
                     detail: "library binary discoverable by linker at '/usr/lib/libevent.so'"
                         .to_string(),
                 },
