@@ -9,7 +9,7 @@ pub mod services;
 pub mod tools;
 
 use std::path::Path;
-use unfuck_core::ir::MachineCapability;
+use concord_core::ir::MachineCapability;
 
 /// Perform deterministic Linux machine inspection.
 pub fn scan_machine() -> MachineCapability {

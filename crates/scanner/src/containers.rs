@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use unfuck_core::evidence::Evidence;
-use unfuck_core::ir::{ContainerObservation, ContainerPortMapping, ContainerStatus};
+use concord_core::evidence::Evidence;
+use concord_core::ir::{ContainerObservation, ContainerPortMapping, ContainerStatus};
 
 /// Parse Docker port mapping strings such as "0.0.0.0:6543->5432/tcp, [::]:6543->5432/tcp".
 pub fn parse_port_mappings(ports_str: &str) -> Vec<ContainerPortMapping> {
