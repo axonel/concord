@@ -8,8 +8,8 @@ pub mod runtimes;
 pub mod services;
 pub mod tools;
 
-use std::path::Path;
 use concord_core::ir::MachineCapability;
+use std::path::Path;
 
 /// Perform deterministic Linux machine inspection.
 pub fn scan_machine() -> MachineCapability {

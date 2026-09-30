@@ -1,10 +1,10 @@
+use concord_core::evidence::{Evidence, EvidenceSource};
+use concord_core::ir::{PortInfo, PortState};
+use concord_core::Confidence;
 use std::collections::HashMap;
 use std::fs;
 use std::net::TcpListener;
 use std::path::Path;
-use concord_core::evidence::{Evidence, EvidenceSource};
-use concord_core::ir::{PortInfo, PortState};
-use concord_core::Confidence;
 
 /// Parse /proc/net/tcp or /proc/net/tcp6 to find listening TCP ports and their socket inodes.
 fn parse_proc_net_tcp(path: &str) -> Vec<(u16, u64)> {
