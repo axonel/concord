@@ -14,30 +14,91 @@ fn resolve_in_path(binary: &str, path_entries: &[PathBuf]) -> Option<PathBuf> {
     None
 }
 
-fn parse_first_semantic_version(output: &str) -> Option<String> {
-    let mut candidate = None;
-    for word in output.split_whitespace() {
-        let clean = word.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
-        let parts: Vec<&str> = clean.split('.').collect();
-        if parts.len() >= 2
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
-        {
-            if parts.len() >= 3 {
-                return Some(clean.to_string());
-            }
-            if candidate.is_none() {
-                candidate = Some(clean.to_string());
-            }
-        }
-    }
-    candidate
-}
+pub use concord_core::version::parse_first_semantic_version;
 
 /// Classify known tool binary names into their appropriate ToolKind.
 pub fn classify_tool_kind(name: &str) -> ToolKind {
     ToolKind::classify(name)
+}
+
+/// Probe a specific tool by binary name in search directories, inspecting its version if present.
+pub fn probe_tool(
+    name: &str,
+    search_dirs: &[PathBuf],
+    project_context: Option<&Path>,
+) -> Option<ToolObservation> {
+    let executable_path = resolve_in_path(name, search_dirs)?;
+    let mut cmd = Command::new(&executable_path);
+    cmd.arg("--version");
+    if let Some(dir) = project_context {
+        cmd.current_dir(dir);
+    }
+
+    let mut out = cmd.output();
+    if out.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+        // Fallback for tools expecting -version (e.g. swig)
+        let mut alt_cmd = Command::new(&executable_path);
+        alt_cmd.arg("-version");
+        if let Some(dir) = project_context {
+            alt_cmd.current_dir(dir);
+        }
+        if let Ok(alt_out) = alt_cmd.output() {
+            if alt_out.status.success() {
+                out = Ok(alt_out);
+            }
+        }
+    }
+    if out.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+        let mut alt_cmd = Command::new(&executable_path);
+        alt_cmd.arg("-v");
+        if let Some(dir) = project_context {
+            alt_cmd.current_dir(dir);
+        }
+        if let Ok(alt_out) = alt_cmd.output() {
+            if alt_out.status.success() {
+                out = Ok(alt_out);
+            }
+        }
+    }
+
+    let (ver, ver_str) = match out {
+        Ok(ref o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let combined = if stdout.trim().is_empty() {
+                stderr.to_string()
+            } else {
+                stdout.to_string()
+            };
+            let ver = parse_first_semantic_version(&combined);
+            (ver, combined.trim().to_string())
+        }
+        _ => (None, "present".to_string()),
+    };
+
+    let kind = classify_tool_kind(name);
+    let evidence = Evidence::new(
+        EvidenceSource::ExecutableInspection {
+            path: executable_path.clone(),
+            version_string: ver_str,
+            exit_code: 0,
+        },
+        Confidence::Confirmed,
+        format!(
+            "Tool '{}' ({}) discovered at {}",
+            name,
+            kind,
+            executable_path.display()
+        ),
+    );
+
+    Some(ToolObservation {
+        name: name.to_string(),
+        kind,
+        version: ver,
+        executable_path,
+        evidence,
+    })
 }
 
 /// Scan developer and build tools on the host system.
@@ -166,6 +227,20 @@ pub fn scan_tools(
         "terragrunt",
         "wasm-opt",
         "extism",
+        // Standard build generators and core tools
+        "autoreconf",
+        "autoconf",
+        "automake",
+        "libtool",
+        "m4",
+        "cat",
+        "more",
+        "sed",
+        "awk",
+        "tar",
+        "gzip",
+        "git",
+        "doxygen",
         // Common code generators
         "bison",
         "yacc",
@@ -202,65 +277,8 @@ pub fn scan_tools(
             continue;
         }
 
-        if let Some(executable_path) = resolve_in_path(tool_name, &search_dirs) {
-            let mut cmd = Command::new(&executable_path);
-            cmd.arg("--version");
-            if let Some(dir) = project_context {
-                cmd.current_dir(dir);
-            }
-
-            let mut out = cmd.output();
-            if out.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
-                // Fallback for tools expecting -version (e.g. swig)
-                let mut alt_cmd = Command::new(&executable_path);
-                alt_cmd.arg("-version");
-                if let Some(dir) = project_context {
-                    alt_cmd.current_dir(dir);
-                }
-                if let Ok(alt_out) = alt_cmd.output() {
-                    if alt_out.status.success() {
-                        out = Ok(alt_out);
-                    }
-                }
-            }
-
-            if let Ok(out) = out {
-                if out.status.success() {
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    let stderr = String::from_utf8_lossy(&out.stderr);
-                    let combined = if stdout.trim().is_empty() {
-                        stderr.to_string()
-                    } else {
-                        stdout.to_string()
-                    };
-
-                    let ver = parse_first_semantic_version(&combined);
-                    let kind = classify_tool_kind(tool_name);
-
-                    let evidence = Evidence::new(
-                        EvidenceSource::ExecutableInspection {
-                            path: executable_path.clone(),
-                            version_string: combined.trim().to_string(),
-                            exit_code: 0,
-                        },
-                        Confidence::Confirmed,
-                        format!(
-                            "Tool '{}' ({}) discovered at {}",
-                            tool_name,
-                            kind,
-                            executable_path.display()
-                        ),
-                    );
-
-                    observations.push(ToolObservation {
-                        name: tool_name.to_string(),
-                        kind,
-                        version: ver,
-                        executable_path,
-                        evidence,
-                    });
-                }
-            }
+        if let Some(obs) = probe_tool(tool_name, &search_dirs, project_context) {
+            observations.push(obs);
         }
     }
 

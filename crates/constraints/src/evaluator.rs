@@ -2,10 +2,11 @@ use crate::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use crate::version::matches_version_constraint;
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{
-    MachineCapability, ProjectRequirement, RequirementKind, ServiceStatus, ToolKind, ToolScope,
+    MachineCapability, ProjectRequirement, RequirementKind, ServiceStatus, ToolKind,
+    ToolObservation, ToolScope,
 };
 use concord_core::{Confidence, VersionConstraint};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Convert a ProjectRequirement into a Constraint.
@@ -377,6 +378,114 @@ fn compiler_supports_standard(
     (true, None)
 }
 
+#[cfg(unix)]
+fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(meta) = path.metadata() {
+        meta.is_file() && (meta.permissions().mode() & 0o111 != 0)
+    } else {
+        false
+    }
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(path: &Path) -> bool {
+    path.is_file()
+}
+
+/// Dynamically probe a tool in the machine's path entries if not pre-scanned.
+pub fn probe_tool_in_paths(
+    name: &str,
+    kind: ToolKind,
+    path_entries: &[PathBuf],
+) -> Option<ToolObservation> {
+    if path_entries.is_empty() {
+        return None;
+    }
+
+    let bin_name = name
+        .strip_prefix("npm:")
+        .or_else(|| name.strip_prefix("pnpm:"))
+        .or_else(|| name.strip_prefix("bun:"))
+        .unwrap_or(name);
+
+    let mut candidate_path = None;
+    if (bin_name.contains('/') || Path::new(bin_name).is_absolute())
+        && is_executable_file(Path::new(bin_name))
+    {
+        candidate_path = Some(PathBuf::from(bin_name));
+    } else {
+        for dir in path_entries {
+            let cand = dir.join(bin_name);
+            if is_executable_file(&cand) {
+                candidate_path = Some(cand);
+                break;
+            }
+        }
+    }
+
+    let candidate = candidate_path?;
+
+    // Attempt version discovery via standard flags
+    let mut out = Command::new(&candidate).arg("--version").output();
+    if out.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+        if let Ok(alt) = Command::new(&candidate).arg("-version").output() {
+            if alt.status.success() {
+                out = Ok(alt);
+            }
+        }
+    }
+    if out.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+        if let Ok(alt) = Command::new(&candidate).arg("-v").output() {
+            if alt.status.success() {
+                out = Ok(alt);
+            }
+        }
+    }
+
+    let (ver, ver_str) = match out {
+        Ok(ref o) if o.status.success() => {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            let combined = if stdout.trim().is_empty() {
+                stderr.to_string()
+            } else {
+                stdout.to_string()
+            };
+            let ver = concord_core::version::parse_first_semantic_version(&combined);
+            (ver, combined.trim().to_string())
+        }
+        _ => (None, "dynamically probed executable".to_string()),
+    };
+
+    let evidence = Evidence::new(
+        EvidenceSource::DynamicProbe {
+            target: candidate.display().to_string(),
+            probe_type: "executable-inspection".to_string(),
+            outcome: if ver_str.is_empty() {
+                format!("Executable present at {}", candidate.display())
+            } else {
+                ver_str
+            },
+        },
+        Confidence::Confirmed,
+        format!(
+            "Tool '{}' ({}) dynamically discovered at {}",
+            name,
+            kind,
+            candidate.display()
+        ),
+    );
+
+    Some(ToolObservation {
+        name: name.to_string(),
+        kind,
+        version: ver,
+        executable_path: candidate,
+        evidence,
+    })
+}
+
 /// Evaluates a single constraint against machine capabilities.
 pub fn evaluate_constraint(
     constraint: &Constraint,
@@ -494,7 +603,12 @@ pub fn evaluate_constraint(
             constraint: req_constraint,
             scope,
         } => {
-            if let Some(tool) = machine.find_tool(name) {
+            let observed_tool = machine
+                .find_tool(name)
+                .cloned()
+                .or_else(|| probe_tool_in_paths(name, *kind, &machine.path_entries));
+
+            if let Some(tool) = observed_tool {
                 if let Some(req_c) = req_constraint {
                     if let Some(ref ver) = tool.version {
                         if req_c.matches(ver) {
@@ -896,6 +1010,11 @@ pub fn evaluate_constraint(
             for cand in candidates {
                 if let Some(tool) = machine.find_tool(cand) {
                     found_tool = Some(tool.clone());
+                    break;
+                } else if let Some(tool) =
+                    probe_tool_in_paths(cand, ToolKind::BuildTool, &machine.path_entries)
+                {
+                    found_tool = Some(tool);
                     break;
                 }
             }
@@ -1425,7 +1544,9 @@ pub fn evaluate_constraint(
                     project_evidence,
                     machine_evidence: None,
                 }
-            } else if let Some(tool) = machine.find_tool(generator_tool) {
+            } else if let Some(tool) = machine.find_tool(generator_tool).cloned().or_else(|| {
+                probe_tool_in_paths(generator_tool, ToolKind::BuildTool, &machine.path_entries)
+            }) {
                 let version_compatible = if let Some(ref vc) = version_constraint {
                     if let Some(ref ver) = tool.version {
                         vc.matches(ver)
@@ -2161,5 +2282,50 @@ mod tests {
         } else {
             panic!("expected Violated status");
         }
+    }
+
+    #[test]
+    fn test_dynamic_tool_probing_satisfied() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let script_path = temp_dir.path().join("my-custom-tool");
+        std::fs::write(&script_path, "#!/bin/sh\necho 'my-custom-tool 2.4.1'\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let mut machine = MachineCapability::empty();
+        machine.path_entries = vec![temp_dir.path().to_path_buf()];
+
+        let constraint = Constraint::ToolAvailable {
+            name: "my-custom-tool".to_string(),
+            kind: ToolKind::BuildTool,
+            constraint: Some(VersionConstraint::parse(">= 2.0.0")),
+            scope: ToolScope::RequiredForBuild,
+        };
+
+        let eval = evaluate_constraint(&constraint, &machine, None);
+        assert_eq!(eval.status, ConstraintStatus::Satisfied);
+        assert!(eval.machine_evidence.is_some());
+        let ev = eval.machine_evidence.unwrap();
+        assert!(ev.description.contains("dynamically discovered"));
+    }
+
+    #[test]
+    fn test_dynamic_tool_probing_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut machine = MachineCapability::empty();
+        machine.path_entries = vec![temp_dir.path().to_path_buf()];
+
+        let constraint = Constraint::ToolAvailable {
+            name: "nonexistent-tool-xyz".to_string(),
+            kind: ToolKind::BuildTool,
+            constraint: None,
+            scope: ToolScope::RequiredForBuild,
+        };
+
+        let eval = evaluate_constraint(&constraint, &machine, None);
+        assert!(eval.is_violated());
     }
 }

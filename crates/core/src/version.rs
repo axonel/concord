@@ -346,6 +346,28 @@ impl VersionConstraint {
     }
 }
 
+/// Extract the first semantic version substring found in text output.
+pub fn parse_first_semantic_version(output: &str) -> Option<String> {
+    let mut candidate = None;
+    for word in output.split_whitespace() {
+        let clean = word.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+        let parts: Vec<&str> = clean.split('.').collect();
+        if parts.len() >= 2
+            && parts
+                .iter()
+                .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+        {
+            if parts.len() >= 3 {
+                return Some(clean.to_string());
+            }
+            if candidate.is_none() {
+                candidate = Some(clean.to_string());
+            }
+        }
+    }
+    candidate
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

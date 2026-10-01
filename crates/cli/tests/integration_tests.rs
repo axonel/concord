@@ -1964,3 +1964,74 @@ fn test_anonymous_build_system_generation_fixture() {
     let preds_done = concord_predictor::predict_failures(&model_done, &evals_done);
     assert!(preds_done.is_empty());
 }
+
+#[test]
+fn test_dynamic_tool_probing_end_to_end() {
+    let temp_tools = tempfile::tempdir().unwrap();
+    let my_tool = temp_tools.path().join("my-custom-compiler");
+    std::fs::write(
+        &my_tool,
+        "#!/bin/sh\necho 'my-custom-compiler (Custom) 3.5.0'\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&my_tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let proj_dir = tempfile::tempdir().unwrap();
+    let manifest = concord_core::ir::ProjectManifest {
+        name: "custom-tool-project".to_string(),
+        root_path: proj_dir.path().to_path_buf(),
+        languages: vec![],
+        package_managers: vec![],
+        requirements: vec![concord_core::ir::ProjectRequirement {
+            name: "my-custom-compiler".to_string(),
+            kind: concord_core::ir::RequirementKind::BuildTool {
+                name: "my-custom-compiler".to_string(),
+                constraint: Some(concord_core::VersionConstraint::parse(">= 3.0.0")),
+                scope: concord_core::ir::ToolScope::RequiredForBuild,
+            },
+            evidence: concord_core::Evidence::from_repo_file(
+                std::path::PathBuf::from("Makefile"),
+                Some(1),
+                "my-custom-compiler requirement",
+            ),
+            additional_evidence: vec![],
+            platform: None,
+        }],
+        declared_ports: vec![],
+        env_vars: vec![],
+        env_var_specs: vec![],
+        components: vec![],
+        compose_projects: vec![],
+        bootstrap_actions: vec![],
+        build_system_generations: vec![],
+        docker_used: false,
+        evidence: vec![],
+    };
+
+    let mut machine = concord_core::ir::MachineCapability::empty();
+    machine.path_entries = vec![temp_tools.path().to_path_buf()];
+
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let eval = evals
+        .iter()
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ToolAvailable { name, .. } if name == "my-custom-compiler"))
+        .expect("my-custom-compiler eval");
+    assert_eq!(
+        eval.status,
+        concord_constraints::model::ConstraintStatus::Satisfied
+    );
+    assert!(eval
+        .machine_evidence
+        .as_ref()
+        .unwrap()
+        .description
+        .contains("dynamically discovered"));
+
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
+    assert!(preds.is_empty());
+}

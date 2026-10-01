@@ -89,6 +89,19 @@ impl ToolKind {
                 | "flang"
                 | "wasm-opt"
                 | "binaryen"
+                | "autoreconf"
+                | "autoconf"
+                | "automake"
+                | "libtool"
+                | "m4"
+                | "cat"
+                | "more"
+                | "sed"
+                | "awk"
+                | "tar"
+                | "gzip"
+                | "git"
+                | "doxygen"
         ) {
             Self::BuildTool
         } else {

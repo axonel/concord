@@ -58,20 +58,7 @@ fn resolve_in_path(binary: &str, path_entries: &[PathBuf]) -> Option<PathBuf> {
     None
 }
 
-fn parse_first_semantic_version(output: &str) -> Option<String> {
-    for word in output.split_whitespace() {
-        let clean = word.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
-        let parts: Vec<&str> = clean.split('.').collect();
-        if parts.len() >= 2
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
-        {
-            return Some(clean.to_string());
-        }
-    }
-    None
-}
+use concord_core::version::parse_first_semantic_version;
 
 /// Scan package managers deterministically, respecting project context for version manager shims.
 pub fn scan_package_managers(
