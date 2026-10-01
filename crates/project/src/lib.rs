@@ -1,3 +1,4 @@
+pub mod autotools;
 pub mod bootstrap;
 pub mod cmake;
 pub mod docker;
@@ -497,6 +498,7 @@ fn analyze_dir(dir: &Path) -> DirAnalysis {
     let go_disc = go::analyze_go(dir);
     let meson_disc = meson::analyze_meson(dir);
     let cmake_disc = cmake::analyze_cmake(dir);
+    let autotools_disc = autotools::analyze_autotools(dir);
     let docker_disc = docker::analyze_docker(dir);
     let env_disc = env::analyze_env(dir);
     let tool_disc = tool_versions::analyze_tool_versions(dir);
@@ -519,6 +521,7 @@ fn analyze_dir(dir: &Path) -> DirAnalysis {
     }
     languages.extend(meson_disc.languages);
     languages.extend(cmake_disc.languages);
+    languages.extend(autotools_disc.languages);
     languages.sort();
     languages.dedup();
 
@@ -535,6 +538,7 @@ fn analyze_dir(dir: &Path) -> DirAnalysis {
     requirements.extend(go_disc.requirements);
     requirements.extend(meson_disc.requirements);
     requirements.extend(cmake_disc.requirements);
+    requirements.extend(autotools_disc.requirements);
     requirements.extend(docker_disc.requirements);
     requirements.extend(env_disc.requirements);
     requirements.extend(tool_disc.requirements);
@@ -557,6 +561,7 @@ fn analyze_dir(dir: &Path) -> DirAnalysis {
     evidence.extend(go_disc.evidence);
     evidence.extend(meson_disc.evidence);
     evidence.extend(cmake_disc.evidence);
+    evidence.extend(autotools_disc.evidence);
     evidence.extend(docker_disc.evidence);
     evidence.extend(env_disc.evidence);
     evidence.extend(tool_disc.evidence);

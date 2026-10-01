@@ -2035,3 +2035,178 @@ fn test_dynamic_tool_probing_end_to_end() {
     let preds = concord_predictor::predict_failures(&model, &evals);
     assert!(preds.is_empty());
 }
+
+#[test]
+fn test_autotools_case_1_ac_check_lib_required() {
+    let dir = tempfile::tempdir().unwrap();
+    let ac = "AC_INIT([test_proj], [1.0])\nAC_PROG_CC\nAC_CHECK_LIB(testlib, test_sym, [], [AC_MSG_ERROR([testlib is required])])\n";
+    std::fs::write(dir.path().join("configure.ac"), ac).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze autotools project");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "testlib")
+        .expect("testlib requirement");
+    match &req.kind {
+        concord_core::ir::RequirementKind::SystemLibrary { name, scope, .. } => {
+            assert_eq!(name, "testlib");
+            assert_eq!(*scope, concord_core::ir::ToolScope::RequiredForBuild);
+        }
+        _ => panic!("expected SystemLibrary requirement"),
+    }
+}
+
+#[test]
+fn test_autotools_case_2_ac_search_libs_anyof() {
+    let dir = tempfile::tempdir().unwrap();
+    let ac = "AC_INIT([test_proj], [1.0])\nAC_SEARCH_LIBS(test_sym, [provider_a provider_b])\n";
+    std::fs::write(dir.path().join("configure.ac"), ac).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze autotools project");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| matches!(&r.kind, concord_core::ir::RequirementKind::AnyOf { capability, .. } if capability == "test_sym_library"))
+        .expect("test_sym_library AnyOf");
+    match &req.kind {
+        concord_core::ir::RequirementKind::AnyOf {
+            capability,
+            alternatives,
+            scope,
+        } => {
+            assert_eq!(capability, "test_sym_library");
+            assert_eq!(*scope, concord_core::ir::ToolScope::Optional);
+            assert_eq!(alternatives.len(), 2);
+            let alt_names: Vec<&str> = alternatives
+                .iter()
+                .filter_map(|a| match &a.kind {
+                    concord_core::ir::RequirementKind::SystemLibrary { name, .. } => {
+                        Some(name.as_str())
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(alt_names, vec!["provider_a", "provider_b"]);
+        }
+        _ => panic!("expected AnyOf requirement"),
+    }
+}
+
+#[test]
+fn test_autotools_case_3_pkg_check_modules_versioned() {
+    let dir = tempfile::tempdir().unwrap();
+    let ac = "AC_INIT([test_proj], [1.0])\nPKG_CHECK_MODULES([FOO], [foo >= 2.0])\n";
+    std::fs::write(dir.path().join("configure.ac"), ac).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze autotools project");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "foo")
+        .expect("foo requirement");
+    match &req.kind {
+        concord_core::ir::RequirementKind::SystemLibrary {
+            name,
+            constraint,
+            scope,
+            ..
+        } => {
+            assert_eq!(name, "foo");
+            assert_eq!(*scope, concord_core::ir::ToolScope::Optional);
+            assert_eq!(
+                constraint.as_ref().unwrap(),
+                &concord_core::VersionConstraint::GreaterEqual("2.0".to_string())
+            );
+        }
+        _ => panic!("expected SystemLibrary requirement"),
+    }
+}
+
+#[test]
+fn test_autotools_case_4_ac_msg_error_turns_probed_dependency_mandatory() {
+    let dir = tempfile::tempdir().unwrap();
+    let ac = "AC_INIT([test_proj], [1.0])\nAC_CHECK_LIB(bar, bar_sym, [found_bar=yes], [found_bar=no])\nif test \"x$found_bar\" = \"xno\"; then\n    AC_MSG_ERROR([bar library missing])\nfi\n";
+    std::fs::write(dir.path().join("configure.ac"), ac).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze autotools project");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "bar")
+        .expect("bar requirement");
+    match &req.kind {
+        concord_core::ir::RequirementKind::SystemLibrary { name, scope, .. } => {
+            assert_eq!(name, "bar");
+            assert_eq!(*scope, concord_core::ir::ToolScope::RequiredForBuild);
+        }
+        _ => panic!("expected SystemLibrary requirement with RequiredForBuild scope"),
+    }
+}
+
+#[test]
+fn test_autotools_case_5_satisfied_anyof_provider_no_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let ac = "AC_INIT([test_proj], [1.0])\nAC_SEARCH_LIBS(test_sym, [provider_a provider_b], [], [AC_MSG_ERROR([no provider])])\n";
+    std::fs::write(dir.path().join("configure.ac"), ac).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze autotools project");
+    let mut machine = concord_core::ir::MachineCapability::empty();
+    let temp_lib = tempfile::tempdir().unwrap();
+    std::fs::write(temp_lib.path().join("libprovider_a.so"), b"").unwrap();
+    machine.env_vars.insert(
+        "LIBRARY_PATH".to_string(),
+        temp_lib.path().to_string_lossy().to_string(),
+    );
+
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let anyof_eval = evals
+        .iter()
+        .find(|e| {
+            matches!(&e.constraint, concord_constraints::model::Constraint::AnyOf { capability, .. } if capability == "test_sym_library")
+        })
+        .expect("anyof eval");
+
+    assert_eq!(
+        anyof_eval.status,
+        concord_constraints::model::ConstraintStatus::Satisfied
+    );
+
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
+    assert!(!preds
+        .iter()
+        .any(|p| p.category == concord_predictor::PredictionCategory::CapabilityUnsatisfied));
+}
+
+#[test]
+fn test_autotools_case_6_all_anyof_providers_missing_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let ac = "AC_INIT([test_proj], [1.0])\nAC_SEARCH_LIBS(test_sym, [provider_a provider_b], [], [AC_MSG_ERROR([no provider])])\n";
+    std::fs::write(dir.path().join("configure.ac"), ac).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze autotools project");
+    // Host has neither provider_a nor provider_b
+    let machine = concord_core::ir::MachineCapability::empty();
+
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+    let anyof_eval = evals
+        .iter()
+        .find(|e| {
+            matches!(&e.constraint, concord_constraints::model::Constraint::AnyOf { capability, .. } if capability == "test_sym_library")
+        })
+        .expect("anyof eval");
+
+    assert!(matches!(
+        anyof_eval.status,
+        concord_constraints::model::ConstraintStatus::Violated { .. }
+    ));
+
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
+    let pred = preds
+        .iter()
+        .find(|p| p.category == concord_predictor::PredictionCategory::CapabilityUnsatisfied)
+        .expect("CapabilityUnsatisfied failure prediction");
+    assert!(pred.summary.contains("test_sym_library"));
+}
