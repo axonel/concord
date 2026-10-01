@@ -1408,6 +1408,95 @@ pub fn evaluate_constraint(
                 }
             }
         }
+
+        Constraint::BuildSystemGenerated {
+            input_declaration,
+            generator_tool,
+            version_constraint,
+            generated_artifact,
+            downstream_build_system: _,
+            bootstrap_script,
+            artifact_present,
+        } => {
+            if *artifact_present {
+                EvaluatedConstraint {
+                    constraint: constraint.clone(),
+                    status: ConstraintStatus::Satisfied,
+                    project_evidence,
+                    machine_evidence: None,
+                }
+            } else if let Some(tool) = machine.find_tool(generator_tool) {
+                let version_compatible = if let Some(ref vc) = version_constraint {
+                    if let Some(ref ver) = tool.version {
+                        vc.matches(ver)
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+
+                if version_compatible {
+                    let script_hint = if let Some(ref s) = bootstrap_script {
+                        format!(" (run '{}' or '{}')", s.display(), generator_tool)
+                    } else {
+                        format!(" (run '{}')", generator_tool)
+                    };
+                    let reason = format!(
+                        "Build system artifact '{}' has not been generated from '{}'{}",
+                        generated_artifact.display(),
+                        input_declaration.display(),
+                        script_hint
+                    );
+                    let root_cause_hint =
+                        format!("build_system.bootstrap_required.{}", generator_tool);
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: Some(tool.evidence.clone()),
+                    }
+                } else {
+                    let ver_str = tool.version.as_deref().unwrap_or("unknown");
+                    let reason = format!(
+                        "Build system generator '{}' version {} does not satisfy requirement {}",
+                        generator_tool,
+                        ver_str,
+                        version_constraint.as_ref().unwrap()
+                    );
+                    let root_cause_hint =
+                        format!("build_system.generator_incompatible.{}", generator_tool);
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: Some(tool.evidence.clone()),
+                    }
+                }
+            } else {
+                let reason = format!(
+                    "Build system artifact '{}' is missing and required generator '{}' is not installed or not in PATH",
+                    generated_artifact.display(),
+                    generator_tool
+                );
+                let root_cause_hint = format!("build_system.generator_missing.{}", generator_tool);
+                EvaluatedConstraint {
+                    constraint: constraint.clone(),
+                    status: ConstraintStatus::Violated {
+                        reason,
+                        root_cause_hint,
+                    },
+                    project_evidence,
+                    machine_evidence: None,
+                }
+            }
+        }
     }
 }
 
@@ -1546,6 +1635,31 @@ pub fn evaluate_project(
                 let evaluated = evaluate_constraint(&constraint, machine, Some(ev));
                 results.push(evaluated);
             }
+        }
+    }
+    for gen in &project.build_system_generations {
+        let artifact_path = project.root_path.join(&gen.generated_artifact);
+        let artifact_present = artifact_path.is_file();
+        let constraint = Constraint::BuildSystemGenerated {
+            input_declaration: gen.input_declaration.clone(),
+            generator_tool: gen.generator_tool.clone(),
+            version_constraint: gen.version_constraint.clone(),
+            generated_artifact: gen.generated_artifact.clone(),
+            downstream_build_system: gen.downstream_build_system.clone(),
+            bootstrap_script: gen.bootstrap_script.clone(),
+            artifact_present,
+        };
+        if !results
+            .iter()
+            .any(|e: &EvaluatedConstraint| e.constraint == constraint)
+        {
+            let ev = Evidence::from_repo_file(
+                gen.input_declaration.clone(),
+                None,
+                gen.description.clone(),
+            );
+            let evaluated = evaluate_constraint(&constraint, machine, Some(ev));
+            results.push(evaluated);
         }
     }
     for req in &project.requirements {

@@ -1703,3 +1703,264 @@ find_program(YACC_EXECUTABLE NAMES byacc yacc REQUIRED)
         concord_constraints::model::ConstraintStatus::Satisfied
     );
 }
+
+#[test]
+fn test_universal_build_system_generation_and_bootstrap_preconditions() {
+    let dir = tempfile::tempdir().unwrap();
+    // 1. Setup repository with input declaration (configure.ac) and bootstrap script (autogen.sh)
+    //    Initially, generated artifact 'configure' is absent.
+    std::fs::write(
+        dir.path().join("configure.ac"),
+        "AC_INIT([test_project], [1.0])\nAC_OUTPUT\n",
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("autogen.sh"), "#!/bin/sh\nautoreconf -fi\n").unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze project");
+
+    // Case 4: Bootstrap action produces the artifact
+    assert!(manifest
+        .bootstrap_actions
+        .iter()
+        .any(|b| b.target_file == std::path::Path::new("configure")));
+    assert_eq!(manifest.build_system_generations.len(), 1);
+    let gen = &manifest.build_system_generations[0];
+    assert_eq!(gen.generator_tool, "autoreconf");
+    assert_eq!(
+        gen.generated_artifact,
+        std::path::PathBuf::from("configure")
+    );
+    assert_eq!(gen.downstream_build_system, "configure");
+    assert_eq!(
+        gen.bootstrap_script,
+        Some(std::path::PathBuf::from("autogen.sh"))
+    );
+
+    // Case 3: Generated artifact absent and generator unavailable
+    let machine_bare = concord_core::ir::MachineCapability::empty();
+    let evals_bare = concord_constraints::evaluator::evaluate_project(&manifest, &machine_bare);
+    let eval_bare = evals_bare
+        .iter()
+        .find(|e| {
+            matches!(
+                &e.constraint,
+                concord_constraints::model::Constraint::BuildSystemGenerated { .. }
+            )
+        })
+        .expect("BuildSystemGenerated eval");
+    assert!(matches!(
+        eval_bare.status,
+        concord_constraints::model::ConstraintStatus::Violated { ref root_cause_hint, .. }
+            if root_cause_hint.starts_with("build_system.generator_missing")
+    ));
+
+    // Case 6: Missing generator produces an appropriate prediction
+    let model_bare =
+        concord_core::ir::EnvironmentModel::new(manifest.clone(), machine_bare.clone());
+    let preds_bare = concord_predictor::predict_failures(&model_bare, &evals_bare);
+    let pred_bare = preds_bare
+        .iter()
+        .find(|p| p.category == concord_predictor::PredictionCategory::BuildSystemGeneratorMissing)
+        .expect("BuildSystemGeneratorMissing prediction");
+    assert!(pred_bare
+        .title
+        .contains("Build system generator 'autoreconf' missing"));
+    assert!(pred_bare
+        .summary
+        .contains("requires generator 'autoreconf'"));
+
+    // Case 5: Generator requirement appears in the causal chain
+    let graph_bare = concord_graph::EnvironmentGraph::build(&model_bare, &evals_bare);
+    let violations_bare = graph_bare.find_violations();
+    assert_eq!(violations_bare.len(), 1);
+    let trace_bare = graph_bare
+        .trace_causal_chain(violations_bare[0])
+        .expect("causal trace");
+    assert!(trace_bare
+        .root_cause
+        .as_ref()
+        .unwrap()
+        .contains("build_system.generator.autoreconf installed"));
+    assert!(trace_bare
+        .causal_steps
+        .iter()
+        .any(|s| s.contains("generator 'autoreconf'")));
+
+    let diags_bare = concord_diagnosis::diagnose_all(&preds_bare, &[trace_bare]);
+    assert_eq!(diags_bare.len(), 1);
+    assert!(diags_bare[0]
+        .root_cause
+        .contains("build_system.generator.autoreconf installed"));
+    assert!(diags_bare[0]
+        .causal_chain
+        .iter()
+        .any(|s| s.contains("generator 'autoreconf'")));
+
+    // Case 2: Generated artifact absent but generator available
+    let mut machine_with_gen = concord_core::ir::MachineCapability::empty();
+    machine_with_gen
+        .tools
+        .push(concord_core::ir::ToolObservation {
+            name: "autoreconf".to_string(),
+            kind: concord_core::ir::ToolKind::CodeGenerator,
+            version: Some("2.71".to_string()),
+            executable_path: std::path::PathBuf::from("/usr/bin/autoreconf"),
+            evidence: concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::ExecutableInspection {
+                    path: std::path::PathBuf::from("/usr/bin/autoreconf"),
+                    version_string: "2.71".to_string(),
+                    exit_code: 0,
+                },
+                concord_core::Confidence::Confirmed,
+                "autoreconf 2.71",
+            ),
+        });
+
+    let evals_gen = concord_constraints::evaluator::evaluate_project(&manifest, &machine_with_gen);
+    let eval_gen = evals_gen
+        .iter()
+        .find(|e| {
+            matches!(
+                &e.constraint,
+                concord_constraints::model::Constraint::BuildSystemGenerated { .. }
+            )
+        })
+        .expect("BuildSystemGenerated eval");
+    assert!(matches!(
+        eval_gen.status,
+        concord_constraints::model::ConstraintStatus::Violated { ref root_cause_hint, .. }
+            if root_cause_hint.starts_with("build_system.bootstrap_required")
+    ));
+
+    let model_gen =
+        concord_core::ir::EnvironmentModel::new(manifest.clone(), machine_with_gen.clone());
+    let preds_gen = concord_predictor::predict_failures(&model_gen, &evals_gen);
+    let pred_gen = preds_gen
+        .iter()
+        .find(|p| {
+            p.category == concord_predictor::PredictionCategory::BuildSystemGenerationRequired
+        })
+        .expect("BuildSystemGenerationRequired prediction");
+    assert!(pred_gen.title.contains("generation required"));
+    assert!(pred_gen.summary.contains("run the bootstrap step"));
+
+    let graph_gen = concord_graph::EnvironmentGraph::build(&model_gen, &evals_gen);
+    let trace_gen = graph_gen
+        .trace_causal_chain(graph_gen.find_violations()[0])
+        .expect("trace gen");
+    assert!(trace_gen
+        .root_cause
+        .as_ref()
+        .unwrap()
+        .contains("build_system.configure.generated"));
+    assert!(trace_gen
+        .causal_steps
+        .iter()
+        .any(|s| s.contains("run bootstrap step before build")));
+
+    let diags_gen = concord_diagnosis::diagnose_all(&preds_gen, &[trace_gen]);
+    assert_eq!(diags_gen.len(), 1);
+    assert_eq!(diags_gen[0].root_cause, "build_system.configure.generated");
+    assert!(diags_gen[0]
+        .bootstrap_suggestions
+        .iter()
+        .any(|s| s.contains("autogen.sh")));
+
+    // Case 1 & Case 7: Generated build artifact exists & does not create a false failure
+    // Even if machine lacks generator!
+    std::fs::write(dir.path().join("configure"), "#!/bin/sh\necho configured\n").unwrap();
+    let manifest_with_artifact =
+        concord_project::analyze_project(dir.path()).expect("analyze project with artifact");
+
+    let evals_with_artifact =
+        concord_constraints::evaluator::evaluate_project(&manifest_with_artifact, &machine_bare);
+    let eval_present = evals_with_artifact
+        .iter()
+        .find(|e| {
+            matches!(
+                &e.constraint,
+                concord_constraints::model::Constraint::BuildSystemGenerated { .. }
+            )
+        })
+        .expect("BuildSystemGenerated eval");
+    assert_eq!(
+        eval_present.status,
+        concord_constraints::model::ConstraintStatus::Satisfied
+    );
+
+    let model_present =
+        concord_core::ir::EnvironmentModel::new(manifest_with_artifact, machine_bare);
+    let preds_present = concord_predictor::predict_failures(&model_present, &evals_with_artifact);
+    assert!(
+        preds_present.is_empty(),
+        "Existing generated artifact must not create false failure predictions"
+    );
+}
+
+#[test]
+fn test_anonymous_build_system_generation_fixture() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("build.spec"), "custom build spec").unwrap();
+    std::fs::write(
+        dir.path().join("setup.sh"),
+        "#!/bin/sh\ngenerator_a build.spec -o build.mk\n",
+    )
+    .unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze project");
+    assert_eq!(manifest.build_system_generations.len(), 1);
+    let gen = &manifest.build_system_generations[0];
+    assert_eq!(gen.generator_tool, "generator_a");
+    assert_eq!(
+        gen.input_declaration,
+        std::path::PathBuf::from("build.spec")
+    );
+    assert_eq!(gen.generated_artifact, std::path::PathBuf::from("build.mk"));
+    assert_eq!(gen.downstream_build_system, "make");
+
+    // 1. Generator missing
+    let machine_bare = concord_core::ir::MachineCapability::empty();
+    let evals_bare = concord_constraints::evaluator::evaluate_project(&manifest, &machine_bare);
+    let model_bare =
+        concord_core::ir::EnvironmentModel::new(manifest.clone(), machine_bare.clone());
+    let preds_bare = concord_predictor::predict_failures(&model_bare, &evals_bare);
+    assert!(preds_bare
+        .iter()
+        .any(|p| p.category == concord_predictor::PredictionCategory::BuildSystemGeneratorMissing));
+
+    // 2. Generator available
+    let mut machine_with_gen = concord_core::ir::MachineCapability::empty();
+    machine_with_gen
+        .tools
+        .push(concord_core::ir::ToolObservation {
+            name: "generator_a".to_string(),
+            kind: concord_core::ir::ToolKind::CodeGenerator,
+            version: Some("1.0.0".to_string()),
+            executable_path: std::path::PathBuf::from("/usr/bin/generator_a"),
+            evidence: concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::ExecutableInspection {
+                    path: std::path::PathBuf::from("/usr/bin/generator_a"),
+                    version_string: "1.0.0".to_string(),
+                    exit_code: 0,
+                },
+                concord_core::Confidence::Confirmed,
+                "generator_a 1.0.0",
+            ),
+        });
+
+    let evals_gen = concord_constraints::evaluator::evaluate_project(&manifest, &machine_with_gen);
+    let model_gen = concord_core::ir::EnvironmentModel::new(manifest.clone(), machine_with_gen);
+    let preds_gen = concord_predictor::predict_failures(&model_gen, &evals_gen);
+    assert!(preds_gen.iter().any(|p| {
+        p.category == concord_predictor::PredictionCategory::BuildSystemGenerationRequired
+    }));
+
+    // 3. Artifact generated
+    std::fs::write(dir.path().join("build.mk"), "all:\n\t@echo ok\n").unwrap();
+    let manifest_done = concord_project::analyze_project(dir.path()).expect("analyze project");
+    let evals_done =
+        concord_constraints::evaluator::evaluate_project(&manifest_done, &machine_bare);
+    let model_done = concord_core::ir::EnvironmentModel::new(manifest_done, machine_bare);
+    let preds_done = concord_predictor::predict_failures(&model_done, &evals_done);
+    assert!(preds_done.is_empty());
+}

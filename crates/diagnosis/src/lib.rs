@@ -549,6 +549,111 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                 ];
                 (format!("compose.{}.state", service_name), chain)
             }
+
+            Constraint::BuildSystemGenerated {
+                input_declaration,
+                generator_tool,
+                version_constraint,
+                generated_artifact,
+                downstream_build_system,
+                bootstrap_script,
+                artifact_present,
+            } => {
+                let actual_state = matching_trace
+                    .and_then(|t| t.machine_state.as_deref())
+                    .unwrap_or(if *artifact_present {
+                        "artifact present"
+                    } else {
+                        "artifact missing or generator unavailable"
+                    });
+
+                if pred.category
+                    == concord_predictor::PredictionCategory::BuildSystemGenerationRequired
+                {
+                    let script_str = bootstrap_script
+                        .as_ref()
+                        .map(|s| format!(" via '{}'", s.display()))
+                        .unwrap_or_default();
+                    let chain = vec![
+                        format!(
+                            "Host machine state: generator '{}' is available; artifact '{}' is not present in repository",
+                            generator_tool,
+                            generated_artifact.display()
+                        ),
+                        format!(
+                            "Project specification: input declaration '{}' produces '{}' using '{}'{}",
+                            input_declaration.display(),
+                            generated_artifact.display(),
+                            generator_tool,
+                            script_str
+                        ),
+                        format!(
+                            "Violated invariant: build_system.{}.generated",
+                            downstream_build_system
+                        ),
+                        format!(
+                            "Downstream impact: {} build system configuration is unavailable; run bootstrap step before building",
+                            downstream_build_system
+                        ),
+                    ];
+                    (
+                        format!("build_system.{}.generated", downstream_build_system),
+                        chain,
+                    )
+                } else if pred.category
+                    == concord_predictor::PredictionCategory::CodeGeneratorIncompatible
+                {
+                    let ver_clause = version_constraint
+                        .as_ref()
+                        .map(|c| format!(" satisfying {}", c))
+                        .unwrap_or_default();
+                    let chain = vec![
+                        format!("Host machine state: {}", actual_state),
+                        format!(
+                            "Project specification: requires generator '{}{}' to produce '{}'",
+                            generator_tool,
+                            ver_clause,
+                            generated_artifact.display()
+                        ),
+                        format!(
+                            "Violated invariant: build_system.generator.{}{}",
+                            generator_tool, ver_clause
+                        ),
+                        format!(
+                            "Downstream impact: build system artifact '{}' cannot be generated; downstream {} build will fail",
+                            generated_artifact.display(),
+                            downstream_build_system
+                        ),
+                    ];
+                    (
+                        format!("build_system.generator.{}{}", generator_tool, ver_clause),
+                        chain,
+                    )
+                } else {
+                    let chain = vec![
+                        format!("Host machine state: {}", actual_state),
+                        format!(
+                            "Project specification: input declaration '{}' requires generator '{}' to produce '{}'",
+                            input_declaration.display(),
+                            generator_tool,
+                            generated_artifact.display()
+                        ),
+                        format!(
+                            "Violated invariant: build_system.generator.{} installed",
+                            generator_tool
+                        ),
+                        format!(
+                            "Downstream impact: build system artifact '{}' cannot be generated; downstream {} build will fail",
+                            generated_artifact.display(),
+                            downstream_build_system
+                        ),
+                    ];
+                    (
+                        format!("build_system.generator.{} installed", generator_tool),
+                        chain,
+                    )
+                }
+            }
         };
 
         let final_root_cause = matching_trace
@@ -617,6 +722,31 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
             transitively_blocked_services.sort();
             if let Some(t) = env_templates.first() {
                 configuration_template = Some(t.template_path.clone());
+            }
+        }
+
+        if let Constraint::BuildSystemGenerated {
+            input_declaration,
+            generator_tool,
+            generated_artifact,
+            bootstrap_script,
+            ..
+        } = &pred.constraint
+        {
+            if let Some(ref s) = bootstrap_script {
+                bootstrap_suggestions.push(format!(
+                    "Run '{}' to generate '{}' from '{}'",
+                    s.display(),
+                    generated_artifact.display(),
+                    input_declaration.display()
+                ));
+            } else {
+                bootstrap_suggestions.push(format!(
+                    "Run '{}' to generate '{}' from '{}'",
+                    generator_tool,
+                    generated_artifact.display(),
+                    input_declaration.display()
+                ));
             }
         }
 

@@ -402,6 +402,16 @@ impl EnvironmentGraph {
                         }
                     }
                 }
+                Constraint::BuildSystemGenerated { generator_tool, .. } => {
+                    if let Some((t_node, _)) = tool_nodes.get(&generator_tool.to_lowercase()) {
+                        let edge_type = if eval.is_violated() {
+                            EdgeData::Violates
+                        } else {
+                            EdgeData::EvaluatedAs
+                        };
+                        graph.add_edge(*t_node, constraint_node, edge_type);
+                    }
+                }
                 _ => {}
             }
         }
@@ -1133,6 +1143,78 @@ impl EnvironmentGraph {
                         ),
                     ],
                 )
+            }
+            Constraint::BuildSystemGenerated {
+                input_declaration,
+                generator_tool,
+                version_constraint: _,
+                generated_artifact,
+                downstream_build_system,
+                bootstrap_script,
+                artifact_present,
+            } => {
+                let actual = machine_state.as_deref().unwrap_or(if *artifact_present {
+                    "artifact present in repository"
+                } else {
+                    "generator unavailable or not in PATH"
+                });
+                let script_clause = bootstrap_script
+                    .as_ref()
+                    .map(|s| format!(" via '{}'", s.display()))
+                    .unwrap_or_default();
+
+                let is_bootstrap_required = match &status {
+                    ConstraintStatus::Violated {
+                        root_cause_hint, ..
+                    } => root_cause_hint.starts_with("build_system.bootstrap_required"),
+                    _ => false,
+                };
+
+                if is_bootstrap_required {
+                    (
+                        format!("build_system.{}.generated", downstream_build_system),
+                        vec![
+                            format!(
+                                "Component '{}' declares build generation from '{}' to '{}'{}",
+                                target_comp,
+                                input_declaration.display(),
+                                generated_artifact.display(),
+                                script_clause
+                            ),
+                            format!("Host machine generator capability: {}", actual),
+                            format!(
+                                "First violated invariant: artifact '{}' generated and up to date",
+                                generated_artifact.display()
+                            ),
+                            format!(
+                                "Impact: build system configuration '{}' is unavailable; run bootstrap step before build",
+                                generated_artifact.display()
+                            ),
+                        ],
+                    )
+                } else {
+                    (
+                        format!("build_system.generator.{} installed", generator_tool),
+                        vec![
+                            format!(
+                                "Component '{}' declares build generation from '{}' requiring generator '{}'",
+                                target_comp,
+                                input_declaration.display(),
+                                generator_tool
+                            ),
+                            format!("Host machine state: {}", actual),
+                            format!(
+                                "First violated invariant: generator '{}' available on host",
+                                generator_tool
+                            ),
+                            format!(
+                                "Impact: build system artifact '{}' cannot be generated; downstream {} build will fail",
+                                generated_artifact.display(),
+                                downstream_build_system
+                            ),
+                        ],
+                    )
+                }
             }
             _ => (
                 format!("{}", constraint),

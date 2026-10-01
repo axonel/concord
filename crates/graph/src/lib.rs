@@ -43,6 +43,7 @@ mod tests {
             components: vec![],
             compose_projects: vec![],
             bootstrap_actions: vec![],
+            build_system_generations: vec![],
             docker_used: false,
             evidence: vec![],
         };

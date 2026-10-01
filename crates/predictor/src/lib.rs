@@ -27,6 +27,8 @@ pub enum PredictionCategory {
     CapabilityUnsatisfied,
     CodeGeneratorMissing,
     CodeGeneratorIncompatible,
+    BuildSystemGenerationRequired,
+    BuildSystemGeneratorMissing,
 }
 
 /// A structured failure prediction derived from deterministic constraint evaluation.
@@ -612,6 +614,88 @@ pub fn predict_failures(
                         machine_evidence: eval.machine_evidence.clone(),
                     });
                 }
+
+                Constraint::BuildSystemGenerated {
+                    input_declaration,
+                    generator_tool,
+                    generated_artifact,
+                    downstream_build_system,
+                    bootstrap_script,
+                    artifact_present: _,
+                    version_constraint: _,
+                } => {
+                    let script_clause = bootstrap_script
+                        .as_ref()
+                        .map(|s| format!(" via '{}'", s.display()))
+                        .unwrap_or_default();
+
+                    if root_cause_hint.starts_with("build_system.bootstrap_required") {
+                        let summary = format!(
+                            "Build configuration '{}' has not been generated from '{}'{}. Required generator '{}' is available; run the bootstrap step before attempting to build.",
+                            generated_artifact.display(),
+                            input_declaration.display(),
+                            script_clause,
+                            generator_tool
+                        );
+                        predictions.push(Prediction {
+                            title: format!(
+                                "Build system artifact '{}' generation required",
+                                generated_artifact.display()
+                            ),
+                            category: PredictionCategory::BuildSystemGenerationRequired,
+                            summary,
+                            confidence: Confidence::Confirmed,
+                            constraint: eval.constraint.clone(),
+                            affected_components: vec![
+                                downstream_build_system.clone(),
+                                "build".to_string(),
+                            ],
+                            project_evidence: eval.project_evidence.clone(),
+                            machine_evidence: eval.machine_evidence.clone(),
+                        });
+                    } else if root_cause_hint.starts_with("build_system.generator_incompatible") {
+                        predictions.push(Prediction {
+                            title: format!(
+                                "Build system generator '{}' incompatible",
+                                generator_tool
+                            ),
+                            category: PredictionCategory::CodeGeneratorIncompatible,
+                            summary: reason.clone(),
+                            confidence: Confidence::Confirmed,
+                            constraint: eval.constraint.clone(),
+                            affected_components: vec![
+                                generator_tool.clone(),
+                                downstream_build_system.clone(),
+                                "build".to_string(),
+                            ],
+                            project_evidence: eval.project_evidence.clone(),
+                            machine_evidence: eval.machine_evidence.clone(),
+                        });
+                    } else {
+                        let summary = format!(
+                            "Build system artifact '{}' requires generator '{}' from declaration '{}', but '{}' is not installed or not in PATH. Downstream {} build cannot proceed.",
+                            generated_artifact.display(),
+                            generator_tool,
+                            input_declaration.display(),
+                            generator_tool,
+                            downstream_build_system
+                        );
+                        predictions.push(Prediction {
+                            title: format!("Build system generator '{}' missing", generator_tool),
+                            category: PredictionCategory::BuildSystemGeneratorMissing,
+                            summary,
+                            confidence: Confidence::Confirmed,
+                            constraint: eval.constraint.clone(),
+                            affected_components: vec![
+                                generator_tool.clone(),
+                                downstream_build_system.clone(),
+                                "build".to_string(),
+                            ],
+                            project_evidence: eval.project_evidence.clone(),
+                            machine_evidence: None,
+                        });
+                    }
+                }
             }
         }
 
@@ -730,6 +814,7 @@ mod tests {
             components: vec![],
             compose_projects: vec![],
             bootstrap_actions: vec![],
+            build_system_generations: vec![],
             docker_used: false,
             evidence: vec![],
         };
@@ -790,6 +875,7 @@ mod tests {
             components: vec![],
             compose_projects: vec![],
             bootstrap_actions: vec![],
+            build_system_generations: vec![],
             docker_used: false,
             evidence: vec![],
         };
@@ -850,6 +936,7 @@ mod tests {
             components: vec![],
             compose_projects: vec![],
             bootstrap_actions: vec![],
+            build_system_generations: vec![],
             docker_used: false,
             evidence: vec![],
         };
@@ -913,6 +1000,7 @@ mod tests {
             components: vec![],
             compose_projects: vec![],
             bootstrap_actions: vec![],
+            build_system_generations: vec![],
             docker_used: false,
             evidence: vec![],
         };

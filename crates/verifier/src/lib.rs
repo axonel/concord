@@ -97,6 +97,18 @@ pub fn verify_environment(
                 format!("capability:{}", capability),
                 "capability".to_string(),
             ),
+            Constraint::BuildSystemGenerated {
+                generated_artifact,
+                downstream_build_system,
+                ..
+            } => (
+                format!(
+                    "build_system:{}:{}",
+                    downstream_build_system,
+                    generated_artifact.display()
+                ),
+                "build_system".to_string(),
+            ),
         };
 
         let passed = eval.is_satisfied();
@@ -162,6 +174,7 @@ mod tests {
             components: vec![],
             compose_projects: vec![],
             bootstrap_actions: vec![],
+            build_system_generations: vec![],
             docker_used: false,
             evidence: vec![],
         };

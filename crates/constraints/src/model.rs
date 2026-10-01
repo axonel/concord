@@ -93,6 +93,17 @@ pub enum Constraint {
         constraints: Vec<Constraint>,
         scope: ToolScope,
     },
+    /// Build system generation precondition: the generated build artifact must either be present,
+    /// or its required generator tool must be available to execute the generation step.
+    BuildSystemGenerated {
+        input_declaration: std::path::PathBuf,
+        generator_tool: String,
+        version_constraint: Option<VersionConstraint>,
+        generated_artifact: std::path::PathBuf,
+        downstream_build_system: String,
+        bootstrap_script: Option<std::path::PathBuf>,
+        artifact_present: bool,
+    },
 }
 
 impl fmt::Display for Constraint {
@@ -285,6 +296,35 @@ impl fmt::Display for Constraint {
                     f,
                     "Capability '{}' must be satisfied by at least one of [{}] (scope: {:?})",
                     capability, alts, scope
+                )
+            }
+            Self::BuildSystemGenerated {
+                input_declaration,
+                generator_tool,
+                generated_artifact,
+                downstream_build_system,
+                bootstrap_script,
+                artifact_present,
+                ..
+            } => {
+                let script_str = bootstrap_script
+                    .as_ref()
+                    .map(|s| format!(" via '{}'", s.display()))
+                    .unwrap_or_default();
+                let presence_str = if *artifact_present {
+                    " (present)"
+                } else {
+                    " (missing)"
+                };
+                write!(
+                    f,
+                    "Build system '{}' artifact '{}'{} must be generated from '{}' using '{}'{}",
+                    downstream_build_system,
+                    generated_artifact.display(),
+                    presence_str,
+                    input_declaration.display(),
+                    generator_tool,
+                    script_str
                 )
             }
         }

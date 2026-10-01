@@ -552,6 +552,32 @@ pub struct BootstrapAction {
     pub description: String,
 }
 
+/// Universal representation of a build-system generation step where an input declaration
+/// requires a generator tool to produce a downstream build artifact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildSystemGeneration {
+    /// The input declaration or template in the repository (e.g. configure.ac, CMakeLists.txt.in).
+    pub input_declaration: PathBuf,
+    /// The required generator or bootstrap tool (e.g. "autoreconf", "autoconf").
+    pub generator_tool: String,
+    /// Optional version constraint on the generator tool.
+    pub version_constraint: Option<VersionConstraint>,
+    /// The generated build system artifact (e.g. "configure", "CMakeLists.txt").
+    pub generated_artifact: PathBuf,
+    /// The downstream build system type or format enabled by this artifact (e.g. "configure", "cmake", "make").
+    pub downstream_build_system: String,
+    /// Optional bootstrap script in repository that executes this generation (e.g. "autogen.sh", "bootstrap.sh").
+    pub bootstrap_script: Option<PathBuf>,
+    /// Human-readable explanation of this generation dependency.
+    pub description: String,
+}
+
+impl BuildSystemGeneration {
+    pub fn is_artifact_present(&self, root: &std::path::Path) -> bool {
+        root.join(&self.generated_artifact).is_file()
+    }
+}
+
 /// Specification of a Docker Compose project discovered in the repository.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComposeProjectSpec {
@@ -591,6 +617,8 @@ pub struct ProjectManifest {
     pub compose_projects: Vec<ComposeProjectSpec>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bootstrap_actions: Vec<BootstrapAction>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub build_system_generations: Vec<BuildSystemGeneration>,
     pub docker_used: bool,
     pub evidence: Vec<Evidence>,
 }
@@ -609,6 +637,7 @@ impl ProjectManifest {
             components: Vec::new(),
             compose_projects: Vec::new(),
             bootstrap_actions: Vec::new(),
+            build_system_generations: Vec::new(),
             docker_used: false,
             evidence: Vec::new(),
         }

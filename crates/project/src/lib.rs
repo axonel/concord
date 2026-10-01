@@ -693,6 +693,16 @@ pub fn analyze_project(root: &Path) -> Result<ProjectManifest> {
         ));
     }
 
+    // 5. Statically analyze build-system generation preconditions
+    let build_system_generations = bootstrap::analyze_build_system_generation(&root_buf);
+    for gen in &build_system_generations {
+        evidence.push(Evidence::from_repo_file(
+            gen.input_declaration.clone(),
+            None,
+            format!("Build system generation precondition: {}", gen.description),
+        ));
+    }
+
     let name = root_buf
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
@@ -710,6 +720,7 @@ pub fn analyze_project(root: &Path) -> Result<ProjectManifest> {
         components,
         compose_projects,
         bootstrap_actions,
+        build_system_generations,
         docker_used,
         evidence,
     })
