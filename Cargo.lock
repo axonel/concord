@@ -121,6 +121,121 @@ dependencies = [
 ]
 
 [[package]]
+name = "concord"
+version = "0.2.1"
+dependencies = [
+ "clap",
+ "colored",
+ "concord-constraints",
+ "concord-core",
+ "concord-diagnosis",
+ "concord-graph",
+ "concord-predictor",
+ "concord-project",
+ "concord-scanner",
+ "concord-verifier",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "concord-constraints"
+version = "0.2.1"
+dependencies = [
+ "concord-core",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "concord-core"
+version = "0.2.1"
+dependencies = [
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "concord-diagnosis"
+version = "0.2.1"
+dependencies = [
+ "concord-constraints",
+ "concord-core",
+ "concord-graph",
+ "concord-predictor",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "concord-graph"
+version = "0.2.1"
+dependencies = [
+ "concord-constraints",
+ "concord-core",
+ "petgraph",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "concord-predictor"
+version = "0.2.1"
+dependencies = [
+ "concord-constraints",
+ "concord-core",
+ "concord-graph",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "concord-project"
+version = "0.2.1"
+dependencies = [
+ "concord-core",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "toml",
+ "walkdir",
+]
+
+[[package]]
+name = "concord-scanner"
+version = "0.2.1"
+dependencies = [
+ "concord-core",
+ "serde",
+ "serde_json",
+ "sysinfo",
+]
+
+[[package]]
+name = "concord-verifier"
+version = "0.2.1"
+dependencies = [
+ "concord-constraints",
+ "concord-core",
+ "concord-project",
+ "concord-scanner",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -550,121 +665,6 @@ name = "toml_write"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
-
-[[package]]
-name = "concord"
-version = "0.2.1"
-dependencies = [
- "clap",
- "colored",
- "serde",
- "serde_json",
- "tempfile",
- "concord-constraints",
- "concord-core",
- "concord-diagnosis",
- "concord-graph",
- "concord-predictor",
- "concord-project",
- "concord-scanner",
- "concord-verifier",
-]
-
-[[package]]
-name = "concord-constraints"
-version = "0.2.1"
-dependencies = [
- "semver",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "concord-core",
-]
-
-[[package]]
-name = "concord-core"
-version = "0.2.1"
-dependencies = [
- "semver",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "concord-diagnosis"
-version = "0.2.1"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "concord-constraints",
- "concord-core",
- "concord-graph",
- "concord-predictor",
-]
-
-[[package]]
-name = "concord-graph"
-version = "0.2.1"
-dependencies = [
- "petgraph",
- "serde",
- "serde_json",
- "thiserror",
- "concord-constraints",
- "concord-core",
-]
-
-[[package]]
-name = "concord-predictor"
-version = "0.2.1"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "concord-constraints",
- "concord-core",
- "concord-graph",
-]
-
-[[package]]
-name = "concord-project"
-version = "0.2.1"
-dependencies = [
- "semver",
- "serde",
- "serde_json",
- "serde_yaml",
- "tempfile",
- "toml",
- "concord-core",
- "walkdir",
-]
-
-[[package]]
-name = "concord-scanner"
-version = "0.2.1"
-dependencies = [
- "serde",
- "serde_json",
- "sysinfo",
- "concord-core",
-]
-
-[[package]]
-name = "concord-verifier"
-version = "0.2.1"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "concord-constraints",
- "concord-core",
- "concord-project",
- "concord-scanner",
-]
 
 [[package]]
 name = "unicode-ident"

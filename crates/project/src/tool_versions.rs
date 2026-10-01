@@ -1,5 +1,5 @@
 use concord_core::evidence::Evidence;
-use concord_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
+use concord_core::ir::{ProjectRequirement, RequirementKind, ToolKind, ToolScope};
 use concord_core::VersionConstraint;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -69,12 +69,9 @@ pub fn classify_tool(tool: &str, ver: &str) -> (String, RequirementKind) {
         );
     }
 
-    // 4. Code generators
-    if base_name.contains("openapi-generator")
-        || base_name.contains("oazapfts")
-        || base_name.contains("protoc")
-        || base_name.contains("sqlc")
-    {
+    // 4. Code generators and Build tools
+    let kind = ToolKind::classify(base_name);
+    if kind == ToolKind::CodeGenerator {
         return (
             tool.to_string(),
             RequirementKind::CodeGenerator {
@@ -84,12 +81,7 @@ pub fn classify_tool(tool: &str, ver: &str) -> (String, RequirementKind) {
             },
         );
     }
-
-    // 5. Build tools
-    if base_name.contains("binaryen")
-        || base_name.contains("wasm-opt")
-        || matches!(base_name, "make" | "cmake" | "ninja" | "gcc" | "clang")
-    {
+    if kind == ToolKind::BuildTool {
         return (
             tool.to_string(),
             RequirementKind::BuildTool {

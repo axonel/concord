@@ -1,5 +1,5 @@
 use concord_core::evidence::{Evidence, EvidenceSource};
-use concord_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
+use concord_core::ir::{ProjectRequirement, RequirementKind, ToolKind, ToolScope};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
 use std::collections::{BTreeMap, HashMap};
@@ -1321,6 +1321,36 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                                 ev.clone(),
                             ));
                             evidence.push(ev);
+                        } else if ToolKind::classify(&pkg_lower) == ToolKind::CodeGenerator {
+                            let ev = Evidence::new(
+                                EvidenceSource::BuildConfiguration {
+                                    path: rel_path.clone(),
+                                    line: Some(cmd.line_no),
+                                    detail: Some(format!(
+                                        "CMake find_package({}) declared (scope: {:?})",
+                                        pkg_name, scope
+                                    )),
+                                },
+                                Confidence::High,
+                                format!(
+                                    "Code generator '{}' declared in CMake find_package ({:?})",
+                                    pkg_name, scope
+                                ),
+                            );
+                            let mut req = ProjectRequirement::new(
+                                pkg_lower.clone(),
+                                RequirementKind::CodeGenerator {
+                                    name: pkg_lower.clone(),
+                                    constraint: ver_constraint,
+                                    scope,
+                                },
+                                ev.clone(),
+                            );
+                            if let Some(ref p) = cmd.platform {
+                                req = req.with_platform(p.clone());
+                            }
+                            requirements.push(req);
+                            evidence.push(ev);
                         } else {
                             // General system library/package requirement
                             let ev = Evidence::new(
@@ -1430,8 +1460,62 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                         ToolScope::Optional
                     };
 
-                    let prog_name = strip_quotes(&cmd.args[1]);
-                    if !prog_name.is_empty() && !prog_name.starts_with('$') {
+                    let var_name = strip_quotes(&cmd.args[0]).to_string();
+                    let mut candidate_names: Vec<String> = Vec::new();
+
+                    for arg in &cmd.args[1..] {
+                        let arg_clean = strip_quotes(arg);
+                        let upper = arg_clean.to_uppercase();
+                        if upper == "NAMES" {
+                            continue;
+                        }
+                        if matches!(
+                            upper.as_str(),
+                            "HINTS"
+                                | "PATHS"
+                                | "PATH_SUFFIXES"
+                                | "DOC"
+                                | "NAMES_PER_DIR"
+                                | "REGISTRY_VIEW"
+                                | "VALIDATOR"
+                                | "REQUIRED"
+                                | "QUIET"
+                                | "NO_DEFAULT_PATH"
+                                | "NO_PACKAGE_ROOT_PATH"
+                                | "NO_CMAKE_PATH"
+                                | "NO_CMAKE_ENVIRONMENT_PATH"
+                                | "NO_SYSTEM_ENVIRONMENT_PATH"
+                                | "NO_CMAKE_SYSTEM_PATH"
+                                | "CMAKE_FIND_ROOT_PATH_BOTH"
+                                | "ONLY_CMAKE_FIND_ROOT_PATH"
+                                | "NO_CMAKE_FIND_ROOT_PATH"
+                        ) {
+                            continue;
+                        }
+
+                        if !arg_clean.is_empty()
+                            && !arg_clean.starts_with('$')
+                            && !arg_clean.contains('/')
+                            && !arg_clean.ends_with(".cmake")
+                            && !candidate_names.contains(&arg_clean.to_string())
+                        {
+                            candidate_names.push(arg_clean.to_string());
+                        }
+                    }
+
+                    if candidate_names.is_empty() {
+                        let prog_name = strip_quotes(&cmd.args[1]);
+                        if !prog_name.is_empty()
+                            && !prog_name.starts_with('$')
+                            && !prog_name.contains('/')
+                        {
+                            candidate_names.push(prog_name.to_string());
+                        }
+                    }
+
+                    if candidate_names.len() == 1 {
+                        let prog_name = &candidate_names[0];
+                        let tool_kind = ToolKind::classify(prog_name);
                         let ev = Evidence::new(
                             EvidenceSource::BuildConfiguration {
                                 path: rel_path.clone(),
@@ -1443,15 +1527,86 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                             },
                             Confidence::High,
                             format!(
-                                "Tool '{}' declared in CMake find_program ({:?})",
-                                prog_name, scope
+                                "{} '{}' declared in CMake find_program ({:?})",
+                                tool_kind, prog_name, scope
                             ),
                         );
-                        let mut req = ProjectRequirement::new(
-                            prog_name.to_lowercase(),
-                            RequirementKind::BuildTool {
+                        let req_kind = match tool_kind {
+                            ToolKind::CodeGenerator => RequirementKind::CodeGenerator {
                                 name: prog_name.to_lowercase(),
                                 constraint: None,
+                                scope,
+                            },
+                            _ => RequirementKind::BuildTool {
+                                name: prog_name.to_lowercase(),
+                                constraint: None,
+                                scope,
+                            },
+                        };
+                        let mut req =
+                            ProjectRequirement::new(prog_name.to_lowercase(), req_kind, ev.clone());
+                        if let Some(ref p) = cmd.platform {
+                            req = req.with_platform(p.clone());
+                        }
+                        requirements.push(req);
+                        evidence.push(ev);
+                    } else if candidate_names.len() > 1 {
+                        let ev = Evidence::new(
+                            EvidenceSource::BuildConfiguration {
+                                path: rel_path.clone(),
+                                line: Some(cmd.line_no),
+                                detail: Some(format!(
+                                    "CMake find_program({}) alternative candidates: {} (scope: {:?})",
+                                    var_name,
+                                    candidate_names.join(", "),
+                                    scope
+                                )),
+                            },
+                            Confidence::High,
+                            format!(
+                                "Alternative tools [{}] declared in CMake find_program for {} ({:?})",
+                                candidate_names.join(", "),
+                                var_name,
+                                scope
+                            ),
+                        );
+                        let alternatives: Vec<ProjectRequirement> = candidate_names
+                            .iter()
+                            .map(|prog_name| {
+                                let tool_kind = ToolKind::classify(prog_name);
+                                let alt_ev = Evidence::new(
+                                    EvidenceSource::BuildConfiguration {
+                                        path: rel_path.clone(),
+                                        line: Some(cmd.line_no),
+                                        detail: Some(format!(
+                                            "Alternative {} candidate '{}' for {}",
+                                            tool_kind, prog_name, var_name
+                                        )),
+                                    },
+                                    Confidence::High,
+                                    format!("Alternative candidate '{}'", prog_name),
+                                );
+                                let req_kind = match tool_kind {
+                                    ToolKind::CodeGenerator => RequirementKind::CodeGenerator {
+                                        name: prog_name.to_lowercase(),
+                                        constraint: None,
+                                        scope,
+                                    },
+                                    _ => RequirementKind::BuildTool {
+                                        name: prog_name.to_lowercase(),
+                                        constraint: None,
+                                        scope,
+                                    },
+                                };
+                                ProjectRequirement::new(prog_name.to_lowercase(), req_kind, alt_ev)
+                            })
+                            .collect();
+
+                        let mut req = ProjectRequirement::new(
+                            var_name.to_lowercase(),
+                            RequirementKind::AnyOf {
+                                capability: var_name.to_lowercase(),
+                                alternatives,
                                 scope,
                             },
                             ev.clone(),
@@ -1987,6 +2142,118 @@ find_package(BZip2 REQUIRED)
                 assert_eq!(*scope, ToolScope::RequiredForBuild);
             }
             _ => panic!("Expected SystemLibrary"),
+        }
+    }
+
+    #[test]
+    fn test_cmake_find_program_code_generator_and_anyof() {
+        let dir = tempdir().unwrap();
+        let cmake_content = r#"
+cmake_minimum_required(VERSION 3.10)
+project(codegen_test C)
+find_program(BISON_EXECUTABLE bison REQUIRED)
+find_program(YACC_EXECUTABLE NAMES byacc yacc REQUIRED)
+find_program(MAKE_EXECUTABLE make)
+"#;
+        fs::write(dir.path().join("CMakeLists.txt"), cmake_content).unwrap();
+
+        let disc = analyze_cmake(dir.path());
+
+        // Single generator
+        let bison_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "bison")
+            .expect("bison requirement");
+        match &bison_req.kind {
+            RequirementKind::CodeGenerator { name, scope, .. } => {
+                assert_eq!(name, "bison");
+                assert_eq!(*scope, ToolScope::RequiredForBuild);
+            }
+            _ => panic!("Expected CodeGenerator for bison"),
+        }
+
+        // Multiple candidates -> AnyOf
+        let yacc_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "yacc_executable")
+            .expect("yacc_executable requirement");
+        match &yacc_req.kind {
+            RequirementKind::AnyOf {
+                capability,
+                alternatives,
+                scope,
+            } => {
+                assert_eq!(capability, "yacc_executable");
+                assert_eq!(*scope, ToolScope::RequiredForBuild);
+                assert_eq!(alternatives.len(), 2);
+                assert!(alternatives.iter().any(|a| a.name == "byacc"));
+                assert!(alternatives.iter().any(|a| a.name == "yacc"));
+            }
+            _ => panic!("Expected AnyOf for yacc_executable"),
+        }
+
+        // Make executable (optional build tool)
+        let make_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "make")
+            .expect("make requirement");
+        match &make_req.kind {
+            RequirementKind::BuildTool { scope, .. } => {
+                assert_eq!(*scope, ToolScope::Optional);
+            }
+            _ => panic!("Expected BuildTool for make"),
+        }
+    }
+
+    #[test]
+    fn test_cmake_find_package_code_generator() {
+        let dir = tempdir().unwrap();
+        let cmake_content = r#"
+cmake_minimum_required(VERSION 3.14)
+project(parser_test C)
+find_package(BISON 3.0 REQUIRED)
+find_package(FLEX REQUIRED)
+"#;
+        fs::write(dir.path().join("CMakeLists.txt"), cmake_content).unwrap();
+
+        let disc = analyze_cmake(dir.path());
+
+        let bison_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "bison")
+            .expect("bison requirement");
+        match &bison_req.kind {
+            RequirementKind::CodeGenerator {
+                name,
+                constraint,
+                scope,
+            } => {
+                assert_eq!(name, "bison");
+                assert_eq!(*scope, ToolScope::RequiredForBuild);
+                assert!(constraint.is_some());
+                assert_eq!(
+                    constraint.as_ref().unwrap(),
+                    &VersionConstraint::GreaterEqual("3.0".to_string())
+                );
+            }
+            _ => panic!("Expected CodeGenerator for bison"),
+        }
+
+        let flex_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "flex")
+            .expect("flex requirement");
+        match &flex_req.kind {
+            RequirementKind::CodeGenerator { name, scope, .. } => {
+                assert_eq!(name, "flex");
+                assert_eq!(*scope, ToolScope::RequiredForBuild);
+            }
+            _ => panic!("Expected CodeGenerator for flex"),
         }
     }
 }

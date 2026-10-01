@@ -1,6 +1,6 @@
 use concord_constraints::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use concord_core::evidence::Evidence;
-use concord_core::ir::{EnvironmentModel, ToolScope};
+use concord_core::ir::{EnvironmentModel, ToolKind, ToolScope};
 use concord_core::Confidence;
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +25,8 @@ pub enum PredictionCategory {
     SystemLibraryMissing,
     SystemLibraryIncompatible,
     CapabilityUnsatisfied,
+    CodeGeneratorMissing,
+    CodeGeneratorIncompatible,
 }
 
 /// A structured failure prediction derived from deterministic constraint evaluation.
@@ -112,45 +114,96 @@ pub fn predict_failures(
                         Some(c) => format!(" {}", c),
                         None => String::new(),
                     };
-                    let (confidence, consequence) = match scope {
-                        ToolScope::RequiredForProject => (
-                            Confidence::High,
-                            "Project execution or development is predicted to fail.",
-                        ),
-                        ToolScope::RequiredForBuild => (
-                            Confidence::High,
-                            "Build or code generation tasks are predicted to fail.",
-                        ),
-                        ToolScope::RequiredForTask => (
-                            Confidence::Medium,
-                            "Specific tasks or development scripts requiring this tool will fail, but core application startup may not be blocked.",
-                        ),
-                        ToolScope::Optional | ToolScope::DeclaredButUnused => (
-                            Confidence::Low,
-                            "Optional tool is missing; non-essential features or tasks may be unavailable.",
-                        ),
-                        ToolScope::Unknown => (
-                            Confidence::Medium,
-                            "Tool is missing; development tasks depending on it may fail.",
-                        ),
-                    };
 
-                    predictions.push(Prediction {
-                        title: format!("{} tool '{}' missing or incompatible", kind, name),
-                        category: PredictionCategory::ToolMissing,
-                        summary: format!(
-                            "Project declares {} '{}'{} ({:?}), but {}. {}",
-                            kind, name, constraint_desc, scope, reason, consequence
-                        ),
-                        confidence,
-                        constraint: eval.constraint.clone(),
-                        affected_components: vec![
-                            name.clone(),
-                            format!("{:?}", kind).to_lowercase(),
-                        ],
-                        project_evidence: eval.project_evidence.clone(),
-                        machine_evidence: eval.machine_evidence.clone(),
-                    });
+                    if matches!(kind, ToolKind::CodeGenerator) {
+                        let is_incompatible = root_cause_hint.contains("version")
+                            || eval.machine_evidence.is_some()
+                            || reason.contains("version");
+                        let (title, category) = if is_incompatible {
+                            (
+                                format!("Code generator '{}' version incompatible", name),
+                                PredictionCategory::CodeGeneratorIncompatible,
+                            )
+                        } else {
+                            (
+                                format!("Code generator '{}' missing", name),
+                                PredictionCategory::CodeGeneratorMissing,
+                            )
+                        };
+
+                        let (confidence, consequence) = match scope {
+                            ToolScope::RequiredForProject | ToolScope::RequiredForBuild => (
+                                Confidence::High,
+                                "Source generation tasks cannot proceed; downstream compilation will fail due to missing generated source.",
+                            ),
+                            ToolScope::RequiredForTask => (
+                                Confidence::Medium,
+                                "Specific tasks or code generation scripts requiring this tool will fail.",
+                            ),
+                            _ => (
+                                Confidence::Low,
+                                "Code generation task may be unavailable.",
+                            ),
+                        };
+
+                        predictions.push(Prediction {
+                            title,
+                            category,
+                            summary: format!(
+                                "Project declares code generator '{}'{} ({:?}), but {}. {}",
+                                name, constraint_desc, scope, reason, consequence
+                            ),
+                            confidence,
+                            constraint: eval.constraint.clone(),
+                            affected_components: vec![
+                                name.clone(),
+                                "codegen".to_string(),
+                                "build".to_string(),
+                            ],
+                            project_evidence: eval.project_evidence.clone(),
+                            machine_evidence: eval.machine_evidence.clone(),
+                        });
+                    } else {
+                        let (confidence, consequence) = match scope {
+                            ToolScope::RequiredForProject => (
+                                Confidence::High,
+                                "Project execution or development is predicted to fail.",
+                            ),
+                            ToolScope::RequiredForBuild => (
+                                Confidence::High,
+                                "Build or native compilation tasks are predicted to fail.",
+                            ),
+                            ToolScope::RequiredForTask => (
+                                Confidence::Medium,
+                                "Specific tasks or development scripts requiring this tool will fail, but core application startup may not be blocked.",
+                            ),
+                            ToolScope::Optional | ToolScope::DeclaredButUnused => (
+                                Confidence::Low,
+                                "Optional tool is missing; non-essential features or tasks may be unavailable.",
+                            ),
+                            ToolScope::Unknown => (
+                                Confidence::Medium,
+                                "Tool is missing; development tasks depending on it may fail.",
+                            ),
+                        };
+
+                        predictions.push(Prediction {
+                            title: format!("{} tool '{}' missing or incompatible", kind, name),
+                            category: PredictionCategory::ToolMissing,
+                            summary: format!(
+                                "Project declares {} '{}'{} ({:?}), but {}. {}",
+                                kind, name, constraint_desc, scope, reason, consequence
+                            ),
+                            confidence,
+                            constraint: eval.constraint.clone(),
+                            affected_components: vec![
+                                name.clone(),
+                                format!("{:?}", kind).to_lowercase(),
+                            ],
+                            project_evidence: eval.project_evidence.clone(),
+                            machine_evidence: eval.machine_evidence.clone(),
+                        });
+                    }
                 }
 
                 Constraint::CompilerAvailable {
@@ -844,5 +897,102 @@ mod tests {
         assert!(!predictions[0]
             .summary
             .contains("Application startup or build is predicted to fail"));
+    }
+
+    #[test]
+    fn test_predict_code_generator_missing_and_incompatible() {
+        let manifest = ProjectManifest {
+            name: "test-codegen".to_string(),
+            root_path: PathBuf::from("/test/codegen"),
+            languages: vec!["c".to_string()],
+            package_managers: vec![],
+            requirements: vec![],
+            declared_ports: vec![],
+            env_vars: vec![],
+            env_var_specs: vec![],
+            components: vec![],
+            compose_projects: vec![],
+            bootstrap_actions: vec![],
+            docker_used: false,
+            evidence: vec![],
+        };
+        let machine = MachineCapability {
+            os: "Linux".to_string(),
+            os_family: "linux".to_string(),
+            arch: "x86_64".to_string(),
+            cpu_count: 4,
+            total_memory_bytes: 8 * 1024 * 1024 * 1024,
+            available_memory_bytes: 8 * 1024 * 1024 * 1024,
+            runtimes: vec![],
+            package_managers: vec![],
+            tools: vec![],
+            services: vec![],
+            containers: vec![],
+            listening_ports: vec![],
+            env_vars: HashMap::new(),
+            path_entries: vec![],
+            evidence: vec![],
+        };
+        let env_model = EnvironmentModel::new(manifest, machine);
+
+        // 1. Missing code generator
+        let eval_missing = EvaluatedConstraint {
+            constraint: Constraint::ToolAvailable {
+                name: "bison".to_string(),
+                kind: ToolKind::CodeGenerator,
+                constraint: None,
+                scope: ToolScope::RequiredForBuild,
+            },
+            status: ConstraintStatus::Violated {
+                reason: "CodeGenerator 'bison' is not installed".to_string(),
+                root_cause_hint: "bison.missing".to_string(),
+            },
+            project_evidence: None,
+            machine_evidence: None,
+        };
+        let preds_missing = predict_failures(&env_model, &[eval_missing]);
+        assert_eq!(preds_missing.len(), 1);
+        assert_eq!(
+            preds_missing[0].category,
+            PredictionCategory::CodeGeneratorMissing
+        );
+        assert!(preds_missing[0]
+            .title
+            .contains("Code generator 'bison' missing"));
+        assert!(preds_missing[0]
+            .summary
+            .contains("Source generation tasks cannot proceed"));
+
+        // 2. Incompatible code generator version
+        let eval_incompat = EvaluatedConstraint {
+            constraint: Constraint::ToolAvailable {
+                name: "flex".to_string(),
+                kind: ToolKind::CodeGenerator,
+                constraint: Some(concord_core::version::VersionConstraint::parse(">= 3.0")),
+                scope: ToolScope::RequiredForBuild,
+            },
+            status: ConstraintStatus::Violated {
+                reason: "CodeGenerator 'flex' version 2.6.4 does not satisfy requirement >= 3.0"
+                    .to_string(),
+                root_cause_hint: "flex.version_mismatch".to_string(),
+            },
+            project_evidence: None,
+            machine_evidence: Some(Evidence::new(
+                concord_core::evidence::EvidenceSource::DirectObservation {
+                    detail: "Host has flex 2.6.4".to_string(),
+                },
+                Confidence::Confirmed,
+                "Host has flex 2.6.4",
+            )),
+        };
+        let preds_incompat = predict_failures(&env_model, &[eval_incompat]);
+        assert_eq!(preds_incompat.len(), 1);
+        assert_eq!(
+            preds_incompat[0].category,
+            PredictionCategory::CodeGeneratorIncompatible
+        );
+        assert!(preds_incompat[0]
+            .title
+            .contains("Code generator 'flex' version incompatible"));
     }
 }

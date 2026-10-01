@@ -1,5 +1,5 @@
 use concord_core::evidence::{Evidence, EvidenceSource};
-use concord_core::ir::{ProjectRequirement, RequirementKind, ToolScope};
+use concord_core::ir::{ProjectRequirement, RequirementKind, ToolKind, ToolScope};
 use concord_core::Confidence;
 use concord_core::VersionConstraint;
 use std::fs;
@@ -279,7 +279,9 @@ fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
 
         if let Some(pos) = start_pos {
             let before_match = &code[..pos.saturating_sub(pattern.len()).min(pos)];
-            if func_name == "dependency" && before_match.ends_with("declare_") {
+            if (func_name == "dependency" && before_match.ends_with("declare_"))
+                || (func_name == "find_program" && before_match.ends_with("override_"))
+            {
                 continue;
             }
 
@@ -339,6 +341,167 @@ fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
     }
 
     calls
+}
+
+fn parse_meson_find_program(
+    call: &MesonCall,
+    rel_path: &Path,
+    options: &std::collections::HashMap<String, MesonOption>,
+) -> Option<ProjectRequirement> {
+    let mut candidate_names: Vec<String> = Vec::new();
+    let (is_req_opt, note) = parse_required_arg_with_options(&call.call_text, options);
+    let scope = match is_req_opt {
+        Some(true) => ToolScope::RequiredForBuild,
+        Some(false) => ToolScope::Optional,
+        None => {
+            if call.call_text.contains("get_option") {
+                ToolScope::Optional
+            } else {
+                ToolScope::RequiredForBuild
+            }
+        }
+    };
+
+    let mut ver_constraint = None;
+    if let Some(idx) = call.call_text.find("version:") {
+        let after = &call.call_text[idx + "version:".len()..];
+        if let Some(first) = after.split(',').next() {
+            let val = strip_quotes(first.trim());
+            if !val.is_empty() {
+                ver_constraint = Some(VersionConstraint::parse(val));
+            }
+        }
+    }
+
+    for arg in call.call_text.split(',') {
+        let arg_trimmed = arg.trim();
+        if arg_trimmed.contains(':') {
+            continue;
+        }
+        if let Some(name) = extract_quoted_string(arg_trimmed) {
+            if !name.contains('/')
+                && !name.ends_with(".sh")
+                && !name.ends_with(".py")
+                && !name.ends_with(".pl")
+                && !candidate_names.contains(&name.to_string())
+            {
+                candidate_names.push(name.to_string());
+            }
+        }
+    }
+
+    if candidate_names.is_empty() {
+        return None;
+    }
+
+    if candidate_names.len() == 1 {
+        let prog_name = &candidate_names[0];
+        let tool_kind = ToolKind::classify(prog_name);
+        let detail = if let Some(n) = note {
+            format!(
+                "Meson find_program('{}') (scope: {:?}, note: {})",
+                prog_name, scope, n
+            )
+        } else {
+            format!(
+                "Meson find_program('{}') declared (scope: {:?})",
+                prog_name, scope
+            )
+        };
+        let ev = Evidence::new(
+            EvidenceSource::BuildConfiguration {
+                path: rel_path.to_path_buf(),
+                line: Some(call.line_no),
+                detail: Some(detail),
+            },
+            Confidence::High,
+            format!(
+                "{} '{}' declared in Meson build configuration ({:?})",
+                tool_kind, prog_name, scope
+            ),
+        );
+        let req_kind = match tool_kind {
+            ToolKind::CodeGenerator => RequirementKind::CodeGenerator {
+                name: prog_name.to_lowercase(),
+                constraint: ver_constraint,
+                scope,
+            },
+            _ => RequirementKind::BuildTool {
+                name: prog_name.to_lowercase(),
+                constraint: ver_constraint,
+                scope,
+            },
+        };
+        let mut req = ProjectRequirement::new(prog_name.to_lowercase(), req_kind, ev);
+        if let Some(ref p) = call.platform {
+            req = req.with_platform(p.clone());
+        }
+        Some(req)
+    } else {
+        let cap_name = format!("{}_executable", candidate_names[0].to_lowercase());
+        let ev = Evidence::new(
+            EvidenceSource::BuildConfiguration {
+                path: rel_path.to_path_buf(),
+                line: Some(call.line_no),
+                detail: Some(format!(
+                    "Meson find_program alternative candidates: {} (scope: {:?})",
+                    candidate_names.join(", "),
+                    scope
+                )),
+            },
+            Confidence::High,
+            format!(
+                "Alternative tools [{}] declared in Meson find_program ({:?})",
+                candidate_names.join(", "),
+                scope
+            ),
+        );
+        let alternatives: Vec<ProjectRequirement> = candidate_names
+            .iter()
+            .map(|prog_name| {
+                let tool_kind = ToolKind::classify(prog_name);
+                let alt_ev = Evidence::new(
+                    EvidenceSource::BuildConfiguration {
+                        path: rel_path.to_path_buf(),
+                        line: Some(call.line_no),
+                        detail: Some(format!(
+                            "Alternative {} candidate '{}'",
+                            tool_kind, prog_name
+                        )),
+                    },
+                    Confidence::High,
+                    format!("Alternative candidate '{}'", prog_name),
+                );
+                let req_kind = match tool_kind {
+                    ToolKind::CodeGenerator => RequirementKind::CodeGenerator {
+                        name: prog_name.to_lowercase(),
+                        constraint: ver_constraint.clone(),
+                        scope,
+                    },
+                    _ => RequirementKind::BuildTool {
+                        name: prog_name.to_lowercase(),
+                        constraint: ver_constraint.clone(),
+                        scope,
+                    },
+                };
+                ProjectRequirement::new(prog_name.to_lowercase(), req_kind, alt_ev)
+            })
+            .collect();
+
+        let mut req = ProjectRequirement::new(
+            cap_name.clone(),
+            RequirementKind::AnyOf {
+                capability: cap_name,
+                alternatives,
+                scope,
+            },
+            ev,
+        );
+        if let Some(ref p) = call.platform {
+            req = req.with_platform(p.clone());
+        }
+        Some(req)
+    }
 }
 
 /// Analyze Meson project configurations (meson.build and included subdirs).
@@ -626,6 +789,15 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
                     seen_libs.insert(call.name, (scope, ev, call.platform));
                 }
             }
+
+            // Extract find_program(...) calls
+            let prog_calls = find_meson_calls(&content, "find_program");
+            for call in prog_calls {
+                if let Some(req) = parse_meson_find_program(&call, rel_path, &meson_options) {
+                    evidence.push(req.evidence.clone());
+                    requirements.push(req);
+                }
+            }
         }
     }
 
@@ -749,6 +921,83 @@ project('my_project', 'c',
                 assert_eq!(min_standard.as_deref(), Some("c11"));
             }
             _ => panic!("Expected Compiler"),
+        }
+    }
+
+    #[test]
+    fn test_meson_find_program_code_generator_and_anyof() {
+        let dir = tempfile::tempdir().unwrap();
+        let content = r#"
+project('app', 'c', meson_version: '>= 0.54.0')
+bison = find_program('bison', required: true)
+flex = find_program('flex', version: '>= 2.6.0', required: true)
+yacc = find_program('byacc', 'yacc', required: false)
+pkgconf = find_program('pkg-config', 'pkgconf', required: false)
+"#;
+        fs::write(dir.path().join("meson.build"), content).unwrap();
+
+        let disc = analyze_meson(dir.path());
+
+        // Single code generator: bison
+        let bison_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "bison")
+            .expect("bison requirement");
+        match &bison_req.kind {
+            RequirementKind::CodeGenerator {
+                name,
+                scope,
+                constraint,
+            } => {
+                assert_eq!(name, "bison");
+                assert_eq!(*scope, ToolScope::RequiredForBuild);
+                assert!(constraint.is_none());
+            }
+            _ => panic!("Expected CodeGenerator for bison"),
+        }
+
+        // Single versioned code generator: flex
+        let flex_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "flex")
+            .expect("flex requirement");
+        match &flex_req.kind {
+            RequirementKind::CodeGenerator {
+                name,
+                scope,
+                constraint,
+            } => {
+                assert_eq!(name, "flex");
+                assert_eq!(*scope, ToolScope::RequiredForBuild);
+                assert_eq!(
+                    constraint.as_ref().unwrap(),
+                    &VersionConstraint::parse(">= 2.6.0")
+                );
+            }
+            _ => panic!("Expected CodeGenerator for flex"),
+        }
+
+        // AnyOf code generator: byacc or yacc (optional)
+        let yacc_req = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "byacc_executable")
+            .expect("byacc_executable requirement");
+        match &yacc_req.kind {
+            RequirementKind::AnyOf {
+                capability,
+                alternatives,
+                scope,
+            } => {
+                assert_eq!(capability, "byacc_executable");
+                assert_eq!(*scope, ToolScope::Optional);
+                assert_eq!(alternatives.len(), 2);
+                assert!(alternatives.iter().any(|a| a.name == "byacc"));
+                assert!(alternatives.iter().any(|a| a.name == "yacc"));
+            }
+            _ => panic!("Expected AnyOf for byacc_executable"),
         }
     }
 }

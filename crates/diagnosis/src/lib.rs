@@ -1,5 +1,6 @@
 use concord_constraints::model::Constraint;
 use concord_core::evidence::Evidence;
+use concord_core::ir::ToolKind;
 use concord_core::Confidence;
 use concord_graph::model::CausalTrace;
 use concord_predictor::Prediction;
@@ -102,20 +103,37 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                     None => " installed".to_string(),
                 };
 
-                let chain = vec![
-                    format!("Host machine state: {}", actual_state),
-                    format!(
-                        "Project specification: declares {} tool {}{} (scope: {:?})",
-                        kind, name, constraint_desc, scope
-                    ),
-                    format!("Violated invariant: tool.{}{}", name, constraint_desc),
-                    format!(
-                        "Downstream impact: tasks or builds relying on {} will fail",
-                        name
-                    ),
-                ];
+                if matches!(kind, ToolKind::CodeGenerator) {
+                    let chain = vec![
+                        format!("Host machine state: {}", actual_state),
+                        format!(
+                            "Project specification: declares code generator {}{} (scope: {:?})",
+                            name, constraint_desc, scope
+                        ),
+                        format!("Violated invariant: codegen.{}{}", name, constraint_desc),
+                        format!(
+                            "Downstream impact: source generation tasks via {} cannot proceed; downstream compilation will fail due to missing generated source",
+                            name
+                        ),
+                    ];
 
-                (format!("tool.{}{}", name, constraint_desc), chain)
+                    (format!("codegen.{}{}", name, constraint_desc), chain)
+                } else {
+                    let chain = vec![
+                        format!("Host machine state: {}", actual_state),
+                        format!(
+                            "Project specification: declares {} tool {}{} (scope: {:?})",
+                            kind, name, constraint_desc, scope
+                        ),
+                        format!("Violated invariant: tool.{}{}", name, constraint_desc),
+                        format!(
+                            "Downstream impact: tasks or builds relying on {} will fail",
+                            name
+                        ),
+                    ];
+
+                    (format!("tool.{}{}", name, constraint_desc), chain)
+                }
             }
 
             Constraint::CompilerAvailable {
@@ -828,5 +846,37 @@ mod tests {
             .causal_chain
             .iter()
             .any(|s| s.contains("Unverified invariant: syslib.libevent.version satisfies")));
+    }
+
+    #[test]
+    fn test_diagnosis_code_generator() {
+        let pred = Prediction {
+            title: "Code generator 'bison' missing".to_string(),
+            category: concord_predictor::PredictionCategory::CodeGeneratorMissing,
+            summary: "Project declares code generator 'bison'".to_string(),
+            confidence: Confidence::High,
+            constraint: Constraint::ToolAvailable {
+                name: "bison".to_string(),
+                kind: ToolKind::CodeGenerator,
+                constraint: None,
+                scope: concord_core::ir::ToolScope::RequiredForBuild,
+            },
+            affected_components: vec!["bison".to_string(), "codegen".to_string()],
+            project_evidence: None,
+            machine_evidence: None,
+        };
+
+        let diags = diagnose_all(&[pred], &[]);
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].problem, "Code generator 'bison' missing");
+        assert_eq!(diags[0].root_cause, "codegen.bison installed");
+        assert!(diags[0]
+            .causal_chain
+            .iter()
+            .any(|s| s.contains("Violated invariant: codegen.bison installed")));
+        assert!(diags[0]
+            .causal_chain
+            .iter()
+            .any(|s| s.contains("source generation tasks via bison cannot proceed")));
     }
 }

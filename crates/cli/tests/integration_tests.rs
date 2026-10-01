@@ -1578,3 +1578,128 @@ fn test_system_library_version_evaluation_end_to_end() {
         concord_constraints::model::ConstraintStatus::Satisfied
     );
 }
+
+#[test]
+fn test_universal_code_generator_capability_and_discovery() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmake_file = r#"
+cmake_minimum_required(VERSION 3.16)
+project(test_codegen C)
+find_program(BISON_EXECUTABLE bison REQUIRED)
+find_program(YACC_EXECUTABLE NAMES byacc yacc REQUIRED)
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmake_file).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze project");
+
+    // 1. Verify requirements discovery
+    let bison_req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "bison")
+        .expect("bison requirement");
+    assert!(matches!(
+        bison_req.kind,
+        concord_core::ir::RequirementKind::CodeGenerator { .. }
+    ));
+
+    let yacc_req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "yacc_executable")
+        .expect("yacc_executable requirement");
+    assert!(matches!(
+        yacc_req.kind,
+        concord_core::ir::RequirementKind::AnyOf { .. }
+    ));
+
+    // 2. Machine lacking bison and yacc alternatives
+    let machine_bare = concord_core::ir::MachineCapability::empty();
+
+    let evals_bare = concord_constraints::evaluator::evaluate_project(&manifest, &machine_bare);
+    let bison_eval = evals_bare
+        .iter()
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ToolAvailable { name, .. } if name == "bison"))
+        .expect("bison eval");
+    assert!(matches!(
+        bison_eval.status,
+        concord_constraints::model::ConstraintStatus::Violated { .. }
+    ));
+
+    let model_bare = concord_core::ir::EnvironmentModel::new(manifest.clone(), machine_bare);
+    let preds_bare = concord_predictor::predict_failures(&model_bare, &evals_bare);
+    let bison_pred = preds_bare
+        .iter()
+        .find(|p| p.category == concord_predictor::PredictionCategory::CodeGeneratorMissing)
+        .expect("bison CodeGeneratorMissing prediction");
+    assert!(bison_pred.title.contains("Code generator 'bison' missing"));
+    assert!(bison_pred
+        .summary
+        .contains("Source generation tasks cannot proceed"));
+
+    let diags_bare = concord_diagnosis::diagnose_all(&preds_bare, &[]);
+    let bison_diag = diags_bare
+        .iter()
+        .find(|d| d.problem.contains("bison"))
+        .expect("bison diagnosis");
+    assert_eq!(bison_diag.root_cause, "codegen.bison installed");
+    assert!(bison_diag
+        .causal_chain
+        .iter()
+        .any(|s| s.contains("source generation tasks via bison cannot proceed")));
+
+    // 3. Machine equipped with bison and byacc
+    let mut machine_equipped = concord_core::ir::MachineCapability::empty();
+    machine_equipped.tools = vec![
+        concord_core::ir::ToolObservation {
+            name: "bison".to_string(),
+            kind: concord_core::ir::ToolKind::CodeGenerator,
+            version: Some("3.8.2".to_string()),
+            executable_path: std::path::PathBuf::from("/usr/bin/bison"),
+            evidence: concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::ExecutableInspection {
+                    path: std::path::PathBuf::from("/usr/bin/bison"),
+                    version_string: "3.8.2".to_string(),
+                    exit_code: 0,
+                },
+                concord_core::Confidence::Confirmed,
+                "bison 3.8.2",
+            ),
+        },
+        concord_core::ir::ToolObservation {
+            name: "byacc".to_string(),
+            kind: concord_core::ir::ToolKind::CodeGenerator,
+            version: Some("20210802".to_string()),
+            executable_path: std::path::PathBuf::from("/usr/bin/byacc"),
+            evidence: concord_core::evidence::Evidence::new(
+                concord_core::evidence::EvidenceSource::ExecutableInspection {
+                    path: std::path::PathBuf::from("/usr/bin/byacc"),
+                    version_string: "20210802".to_string(),
+                    exit_code: 0,
+                },
+                concord_core::Confidence::Confirmed,
+                "byacc 20210802",
+            ),
+        },
+    ];
+
+    let evals_equipped =
+        concord_constraints::evaluator::evaluate_project(&manifest, &machine_equipped);
+    let bison_eval_eq = evals_equipped
+        .iter()
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::ToolAvailable { name, .. } if name == "bison"))
+        .expect("bison eval");
+    assert_eq!(
+        bison_eval_eq.status,
+        concord_constraints::model::ConstraintStatus::Satisfied
+    );
+
+    let yacc_eval_eq = evals_equipped
+        .iter()
+        .find(|e| matches!(&e.constraint, concord_constraints::model::Constraint::AnyOf { capability, .. } if capability == "yacc_executable"))
+        .expect("yacc AnyOf eval");
+    assert_eq!(
+        yacc_eval_eq.status,
+        concord_constraints::model::ConstraintStatus::Satisfied
+    );
+}

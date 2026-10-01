@@ -29,6 +29,74 @@ impl std::fmt::Display for ToolKind {
     }
 }
 
+impl ToolKind {
+    /// Classifies a tool binary or package name into its canonical ToolKind.
+    pub fn classify(name: &str) -> Self {
+        let lower = name.to_lowercase();
+        let stripped = lower
+            .strip_prefix("npm:")
+            .or_else(|| lower.strip_prefix("github:"))
+            .unwrap_or(&lower);
+        let base = stripped.rsplit('/').next().unwrap_or(stripped);
+
+        if matches!(
+            base,
+            "bison"
+                | "yacc"
+                | "byacc"
+                | "flex"
+                | "lex"
+                | "gperf"
+                | "ragel"
+                | "swig"
+                | "protoc"
+                | "protobuf"
+                | "flatc"
+                | "flatbuffers"
+                | "capnp"
+                | "capnproto"
+                | "thrift"
+                | "rpcgen"
+                | "wayland-scanner"
+                | "glib-compile-resources"
+                | "glib-mkenums"
+                | "glib-genmarshal"
+                | "bindgen"
+                | "cbindgen"
+                | "sqlc"
+                | "openapi-generator"
+                | "oazapfts"
+        ) || base.contains("openapi-generator")
+            || base.contains("oazapfts")
+        {
+            Self::CodeGenerator
+        } else if matches!(
+            base,
+            "make"
+                | "cmake"
+                | "ninja"
+                | "meson"
+                | "pkg-config"
+                | "pkgconf"
+                | "gcc"
+                | "clang"
+                | "cc"
+                | "g++"
+                | "clang++"
+                | "c++"
+                | "nvcc"
+                | "gfortran"
+                | "flang"
+                | "wasm-opt"
+                | "binaryen"
+        ) {
+            Self::BuildTool
+        } else {
+            Self::DeveloperTool
+        }
+    }
+}
+
 /// Operational scope of a tool requirement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -262,6 +262,45 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                     existing.additional_evidence.extend(req.additional_evidence);
                 }
                 (
+                    RequirementKind::CodeGenerator {
+                        name,
+                        constraint: c1,
+                        scope: s1,
+                    },
+                    RequirementKind::CodeGenerator {
+                        constraint: c2,
+                        scope: s2,
+                        ..
+                    },
+                ) => {
+                    let merged_scope = match (s1, s2) {
+                        (concord_core::ir::ToolScope::RequiredForBuild, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForBuild) => {
+                            concord_core::ir::ToolScope::RequiredForBuild
+                        }
+                        (concord_core::ir::ToolScope::RequiredForTask, _)
+                        | (_, concord_core::ir::ToolScope::RequiredForTask) => {
+                            concord_core::ir::ToolScope::RequiredForTask
+                        }
+                        _ => *s1,
+                    };
+                    let merged_constraint = match (c1, c2) {
+                        (Some(v1), Some(v2)) => match v1.intersect(v2) {
+                            Ok(intersected) => Some(intersected),
+                            Err(_) => Some(v1.clone()),
+                        },
+                        (Some(v), None) | (None, Some(v)) => Some(v.clone()),
+                        (None, None) => None,
+                    };
+                    existing.kind = RequirementKind::CodeGenerator {
+                        name: name.clone(),
+                        constraint: merged_constraint,
+                        scope: merged_scope,
+                    };
+                    existing.additional_evidence.push(req.evidence);
+                    existing.additional_evidence.extend(req.additional_evidence);
+                }
+                (
                     RequirementKind::Compiler {
                         language,
                         min_standard: s1,

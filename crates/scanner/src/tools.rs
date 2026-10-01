@@ -37,35 +37,7 @@ fn parse_first_semantic_version(output: &str) -> Option<String> {
 
 /// Classify known tool binary names into their appropriate ToolKind.
 pub fn classify_tool_kind(name: &str) -> ToolKind {
-    let lower = name.to_lowercase();
-    if lower.contains("oazapfts")
-        || lower.contains("openapi-generator")
-        || lower.contains("protoc")
-        || lower.contains("sqlc")
-    {
-        ToolKind::CodeGenerator
-    } else if lower.contains("binaryen")
-        || lower.contains("wasm-opt")
-        || lower == "make"
-        || lower == "cmake"
-        || lower == "ninja"
-        || lower == "meson"
-        || lower == "pkg-config"
-        || lower == "pkgconf"
-        || lower == "gcc"
-        || lower == "clang"
-        || lower == "cc"
-        || lower == "g++"
-        || lower == "clang++"
-        || lower == "c++"
-        || lower == "nvcc"
-        || lower == "gfortran"
-        || lower == "flang"
-    {
-        ToolKind::BuildTool
-    } else {
-        ToolKind::DeveloperTool
-    }
+    ToolKind::classify(name)
 }
 
 /// Scan developer and build tools on the host system.
@@ -172,7 +144,7 @@ pub fn scan_tools(
         }
     }
 
-    // 2. PATH resolution for common developer/build tools
+    // 2. PATH resolution for common developer/build tools and code generators
     let common_tools = &[
         "make",
         "cmake",
@@ -194,6 +166,26 @@ pub fn scan_tools(
         "terragrunt",
         "wasm-opt",
         "extism",
+        // Common code generators
+        "bison",
+        "yacc",
+        "byacc",
+        "flex",
+        "lex",
+        "gperf",
+        "ragel",
+        "swig",
+        "protoc",
+        "flatc",
+        "capnp",
+        "thrift",
+        "wayland-scanner",
+        "glib-compile-resources",
+        "glib-mkenums",
+        "glib-genmarshal",
+        "bindgen",
+        "cbindgen",
+        "rpcgen",
     ];
 
     let mut search_dirs = path_entries.to_vec();
@@ -217,7 +209,22 @@ pub fn scan_tools(
                 cmd.current_dir(dir);
             }
 
-            if let Ok(out) = cmd.output() {
+            let mut out = cmd.output();
+            if out.as_ref().map(|o| !o.status.success()).unwrap_or(true) {
+                // Fallback for tools expecting -version (e.g. swig)
+                let mut alt_cmd = Command::new(&executable_path);
+                alt_cmd.arg("-version");
+                if let Some(dir) = project_context {
+                    alt_cmd.current_dir(dir);
+                }
+                if let Ok(alt_out) = alt_cmd.output() {
+                    if alt_out.status.success() {
+                        out = Ok(alt_out);
+                    }
+                }
+            }
+
+            if let Ok(out) = out {
                 if out.status.success() {
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -276,6 +283,15 @@ mod tests {
         assert_eq!(classify_tool_kind("c++"), ToolKind::BuildTool);
         assert_eq!(classify_tool_kind("npm:oazapfts"), ToolKind::CodeGenerator);
         assert_eq!(classify_tool_kind("protoc"), ToolKind::CodeGenerator);
+        assert_eq!(classify_tool_kind("bison"), ToolKind::CodeGenerator);
+        assert_eq!(classify_tool_kind("byacc"), ToolKind::CodeGenerator);
+        assert_eq!(classify_tool_kind("flex"), ToolKind::CodeGenerator);
+        assert_eq!(classify_tool_kind("swig"), ToolKind::CodeGenerator);
+        assert_eq!(classify_tool_kind("bindgen"), ToolKind::CodeGenerator);
+        assert_eq!(
+            classify_tool_kind("wayland-scanner"),
+            ToolKind::CodeGenerator
+        );
         assert_eq!(classify_tool_kind("opentofu"), ToolKind::DeveloperTool);
         assert_eq!(classify_tool_kind("terragrunt"), ToolKind::DeveloperTool);
     }
