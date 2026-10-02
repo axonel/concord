@@ -229,12 +229,14 @@ struct MesonCall {
     pub call_text: String,
     pub line_no: usize,
     pub platform: Option<String>,
+    pub arch: Option<String>,
 }
 
 fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
     let mut calls = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
     let mut current_platform = None;
+    let mut current_arch = None;
 
     for (line_idx, line) in lines.iter().enumerate() {
         let code = match line.split_once('#') {
@@ -262,9 +264,36 @@ fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
             {
                 current_platform = Some("linux".to_string());
             }
+
+            if code.contains("cpu_family() == 'x86_64'")
+                || code.contains("cpu_family() == \"x86_64\"")
+                || code.contains("cpu() == 'x86_64'")
+                || code.contains("cpu() == \"x86_64\"")
+            {
+                current_arch = Some("x86_64".to_string());
+            } else if code.contains("cpu_family() == 'aarch64'")
+                || code.contains("cpu_family() == \"aarch64\"")
+                || code.contains("cpu() == 'aarch64'")
+                || code.contains("cpu() == \"aarch64\"")
+            {
+                current_arch = Some("aarch64".to_string());
+            } else if code.contains("cpu_family() == 'arm'")
+                || code.contains("cpu_family() == \"arm\"")
+            {
+                current_arch = Some("armv7".to_string());
+            } else if code.contains("cpu_family() == 'riscv64'")
+                || code.contains("cpu_family() == \"riscv64\"")
+            {
+                current_arch = Some("riscv64".to_string());
+            } else if code.contains("cpu_family() == 'ppc64'")
+                || code.contains("cpu_family() == \"ppc64\"")
+            {
+                current_arch = Some("ppc64le".to_string());
+            }
         }
         if code == "endif" || code.starts_with("endif ") {
             current_platform = None;
+            current_arch = None;
         }
 
         let pattern = format!("{}(", func_name);
@@ -334,6 +363,7 @@ fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
                         call_text,
                         line_no: line_idx + 1,
                         platform: current_platform.clone(),
+                        arch: current_arch.clone(),
                     });
                 }
             }
@@ -436,6 +466,9 @@ fn parse_meson_find_program(
         if let Some(ref p) = call.platform {
             req = req.with_platform(p.clone());
         }
+        if let Some(ref a) = call.arch {
+            req = req.with_arch(a.clone());
+        }
         Some(req)
     } else {
         let cap_name = format!("{}_executable", candidate_names[0].to_lowercase());
@@ -484,7 +517,15 @@ fn parse_meson_find_program(
                         scope,
                     },
                 };
-                ProjectRequirement::new(prog_name.to_lowercase(), req_kind, alt_ev)
+                let mut alt_req =
+                    ProjectRequirement::new(prog_name.to_lowercase(), req_kind, alt_ev);
+                if let Some(ref p) = call.platform {
+                    alt_req = alt_req.with_platform(p.clone());
+                }
+                if let Some(ref a) = call.arch {
+                    alt_req = alt_req.with_arch(a.clone());
+                }
+                alt_req
             })
             .collect();
 
@@ -499,6 +540,9 @@ fn parse_meson_find_program(
         );
         if let Some(ref p) = call.platform {
             req = req.with_platform(p.clone());
+        }
+        if let Some(ref a) = call.arch {
+            req = req.with_arch(a.clone());
         }
         Some(req)
     }
@@ -705,7 +749,9 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
     let mut python_evidence = None;
     let mut seen_modules: std::collections::BTreeMap<String, (PathBuf, usize)> =
         std::collections::BTreeMap::new();
-    let mut seen_libs: std::collections::BTreeMap<String, (ToolScope, Evidence, Option<String>)> =
+    type MesonLibKey = (String, Option<String>, Option<String>);
+    type MesonLibEntry = (ToolScope, Evidence);
+    let mut seen_libs: std::collections::BTreeMap<MesonLibKey, MesonLibEntry> =
         std::collections::BTreeMap::new();
 
     for rel_path in &build_files {
@@ -781,12 +827,13 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
                     ),
                 );
 
-                if let Some(existing) = seen_libs.get_mut(&call.name) {
+                let lib_key = (call.name, call.platform, call.arch);
+                if let Some(existing) = seen_libs.get_mut(&lib_key) {
                     if existing.0 == ToolScope::Optional && scope == ToolScope::RequiredForBuild {
-                        *existing = (scope, ev, call.platform);
+                        *existing = (scope, ev);
                     }
                 } else {
-                    seen_libs.insert(call.name, (scope, ev, call.platform));
+                    seen_libs.insert(lib_key, (scope, ev));
                 }
             }
 
@@ -838,7 +885,7 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
         }
     }
 
-    for (name, (scope, ev, plat)) in seen_libs {
+    for ((name, plat, arch), (scope, ev)) in seen_libs {
         let mut req = ProjectRequirement::new(
             name.clone(),
             RequirementKind::SystemLibrary {
@@ -851,6 +898,9 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
         );
         if let Some(p) = plat {
             req = req.with_platform(p);
+        }
+        if let Some(a) = arch {
+            req = req.with_arch(a);
         }
         requirements.push(req);
         evidence.push(ev);

@@ -104,6 +104,32 @@ pub enum Constraint {
         bootstrap_script: Option<std::path::PathBuf>,
         artifact_present: bool,
     },
+    /// Constraint guarded by platform and/or architecture conditions.
+    EnvironmentGuarded {
+        constraint: Box<Constraint>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        platform: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arch: Option<String>,
+    },
+}
+
+impl Constraint {
+    /// Unwrap any environment guards down to the underlying concrete constraint.
+    pub fn inner_constraint(&self) -> &Constraint {
+        match self {
+            Self::EnvironmentGuarded { constraint, .. } => constraint.inner_constraint(),
+            other => other,
+        }
+    }
+
+    /// Access the platform and architecture conditions guarding this constraint, if any.
+    pub fn environment_guard(&self) -> Option<(&Option<String>, &Option<String>)> {
+        match self {
+            Self::EnvironmentGuarded { platform, arch, .. } => Some((platform, arch)),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Constraint {
@@ -327,6 +353,24 @@ impl fmt::Display for Constraint {
                     script_str
                 )
             }
+            Self::EnvironmentGuarded {
+                constraint,
+                platform,
+                arch,
+            } => {
+                let mut guards = Vec::new();
+                if let Some(ref p) = platform {
+                    guards.push(format!("platform: {}", p));
+                }
+                if let Some(ref a) = arch {
+                    guards.push(format!("arch: {}", a));
+                }
+                if guards.is_empty() {
+                    write!(f, "{}", constraint)
+                } else {
+                    write!(f, "{} [guarded by {}]", constraint, guards.join(", "))
+                }
+            }
         }
     }
 }
@@ -341,6 +385,9 @@ pub enum ConstraintStatus {
         root_cause_hint: String,
     },
     Unknown {
+        reason: String,
+    },
+    NotApplicable {
         reason: String,
     },
 }
@@ -365,5 +412,13 @@ impl EvaluatedConstraint {
 
     pub fn is_unknown(&self) -> bool {
         matches!(self.status, ConstraintStatus::Unknown { .. })
+    }
+
+    pub fn is_not_applicable(&self) -> bool {
+        matches!(self.status, ConstraintStatus::NotApplicable { .. })
+    }
+
+    pub fn is_applicable(&self) -> bool {
+        !self.is_not_applicable()
     }
 }

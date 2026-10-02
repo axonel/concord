@@ -228,7 +228,7 @@ impl EnvironmentGraph {
                     }
 
                     // 2. Direct component requirement match
-                    let has_direct_req = match &eval.constraint {
+                    let has_direct_req = match eval.constraint.inner_constraint() {
                         Constraint::RuntimeVersion { runtime, .. } => {
                             c.requirements.iter().any(|r| r.name == *runtime)
                         }
@@ -264,7 +264,7 @@ impl EnvironmentGraph {
                     }
 
                     // 3. Language or package manager heuristic match
-                    let matches_heuristic = match &eval.constraint {
+                    let matches_heuristic = match eval.constraint.inner_constraint() {
                         Constraint::RuntimeVersion { runtime, .. } => c
                             .languages
                             .iter()
@@ -307,112 +307,115 @@ impl EnvironmentGraph {
             }
 
             // Connect machine capability and machine evidence
-            match &eval.constraint {
-                Constraint::RuntimeVersion { runtime, .. } => {
-                    if let Some((rt_node, _)) = runtime_nodes.get(&runtime.to_lowercase()) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*rt_node, constraint_node, edge_type);
-                    }
-                }
-                Constraint::PackageManagerVersion { name, .. } => {
-                    if let Some((pm_node, _)) = pkg_mgr_nodes.get(&name.to_lowercase()) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*pm_node, constraint_node, edge_type);
-                    }
-                }
-                Constraint::ToolAvailable { name, .. } => {
-                    if let Some((t_node, _)) = tool_nodes.get(&name.to_lowercase()) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*t_node, constraint_node, edge_type);
-                    }
-                }
-                Constraint::ComposeServiceState {
-                    service_name,
-                    container_name,
-                    ..
-                } => {
-                    let target_name = container_name.as_deref().unwrap_or(service_name);
-                    if let Some((c_node, _)) = container_nodes.get(target_name) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*c_node, constraint_node, edge_type);
-                    }
-                }
-                Constraint::PortAvailable { port } => {
-                    if let Some((p_node, _)) = port_nodes.get(port) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*p_node, constraint_node, edge_type);
-                    }
-                }
-                Constraint::ServiceRunning { service, .. } => {
-                    if let Some((srv_node, _)) = service_nodes.get(&service.to_lowercase()) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*srv_node, constraint_node, edge_type);
-                    }
-                }
-                Constraint::AnyOf { constraints, .. } => {
-                    for sub_c in constraints {
-                        match sub_c {
-                            Constraint::RuntimeVersion { runtime, .. } => {
-                                if let Some((rt_node, _)) =
-                                    runtime_nodes.get(&runtime.to_lowercase())
-                                {
-                                    let edge_type = if eval.is_violated() {
-                                        EdgeData::Violates
-                                    } else {
-                                        EdgeData::EvaluatedAs
-                                    };
-                                    graph.add_edge(*rt_node, constraint_node, edge_type);
-                                }
-                            }
-                            Constraint::ToolAvailable { name, .. } => {
-                                if let Some((t_node, _)) = tool_nodes.get(&name.to_lowercase()) {
-                                    let edge_type = if eval.is_violated() {
-                                        EdgeData::Violates
-                                    } else {
-                                        EdgeData::EvaluatedAs
-                                    };
-                                    graph.add_edge(*t_node, constraint_node, edge_type);
-                                }
-                            }
-                            _ => {}
+            if !eval.is_not_applicable() {
+                match eval.constraint.inner_constraint() {
+                    Constraint::RuntimeVersion { runtime, .. } => {
+                        if let Some((rt_node, _)) = runtime_nodes.get(&runtime.to_lowercase()) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*rt_node, constraint_node, edge_type);
                         }
                     }
-                }
-                Constraint::BuildSystemGenerated { generator_tool, .. } => {
-                    if let Some((t_node, _)) = tool_nodes.get(&generator_tool.to_lowercase()) {
-                        let edge_type = if eval.is_violated() {
-                            EdgeData::Violates
-                        } else {
-                            EdgeData::EvaluatedAs
-                        };
-                        graph.add_edge(*t_node, constraint_node, edge_type);
+                    Constraint::PackageManagerVersion { name, .. } => {
+                        if let Some((pm_node, _)) = pkg_mgr_nodes.get(&name.to_lowercase()) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*pm_node, constraint_node, edge_type);
+                        }
                     }
+                    Constraint::ToolAvailable { name, .. } => {
+                        if let Some((t_node, _)) = tool_nodes.get(&name.to_lowercase()) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*t_node, constraint_node, edge_type);
+                        }
+                    }
+                    Constraint::ComposeServiceState {
+                        service_name,
+                        container_name,
+                        ..
+                    } => {
+                        let target_name = container_name.as_deref().unwrap_or(service_name);
+                        if let Some((c_node, _)) = container_nodes.get(target_name) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*c_node, constraint_node, edge_type);
+                        }
+                    }
+                    Constraint::PortAvailable { port } => {
+                        if let Some((p_node, _)) = port_nodes.get(port) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*p_node, constraint_node, edge_type);
+                        }
+                    }
+                    Constraint::ServiceRunning { service, .. } => {
+                        if let Some((srv_node, _)) = service_nodes.get(&service.to_lowercase()) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*srv_node, constraint_node, edge_type);
+                        }
+                    }
+                    Constraint::AnyOf { constraints, .. } => {
+                        for sub_c in constraints {
+                            match sub_c {
+                                Constraint::RuntimeVersion { runtime, .. } => {
+                                    if let Some((rt_node, _)) =
+                                        runtime_nodes.get(&runtime.to_lowercase())
+                                    {
+                                        let edge_type = if eval.is_violated() {
+                                            EdgeData::Violates
+                                        } else {
+                                            EdgeData::EvaluatedAs
+                                        };
+                                        graph.add_edge(*rt_node, constraint_node, edge_type);
+                                    }
+                                }
+                                Constraint::ToolAvailable { name, .. } => {
+                                    if let Some((t_node, _)) = tool_nodes.get(&name.to_lowercase())
+                                    {
+                                        let edge_type = if eval.is_violated() {
+                                            EdgeData::Violates
+                                        } else {
+                                            EdgeData::EvaluatedAs
+                                        };
+                                        graph.add_edge(*t_node, constraint_node, edge_type);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    Constraint::BuildSystemGenerated { generator_tool, .. } => {
+                        if let Some((t_node, _)) = tool_nodes.get(&generator_tool.to_lowercase()) {
+                            let edge_type = if eval.is_violated() {
+                                EdgeData::Violates
+                            } else {
+                                EdgeData::EvaluatedAs
+                            };
+                            graph.add_edge(*t_node, constraint_node, edge_type);
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
 
@@ -699,7 +702,7 @@ impl EnvironmentGraph {
             .first()
             .cloned()
             .unwrap_or_else(|| "project".to_string());
-        let (root_cause, causal_steps) = match &constraint {
+        let (root_cause, mut causal_steps) = match constraint.inner_constraint() {
             Constraint::RuntimeVersion {
                 runtime,
                 constraint,
@@ -1227,6 +1230,25 @@ impl EnvironmentGraph {
                 ],
             ),
         };
+
+        if let Some((plat, arch)) = constraint.environment_guard() {
+            let mut guard_desc = Vec::new();
+            if let Some(ref p) = plat {
+                guard_desc.push(format!("platform '{}'", p));
+            }
+            if let Some(ref a) = arch {
+                guard_desc.push(format!("architecture '{}'", a));
+            }
+            if !guard_desc.is_empty() {
+                causal_steps.insert(
+                    0,
+                    format!(
+                        "Active environment condition: {} matched host machine",
+                        guard_desc.join(" and ")
+                    ),
+                );
+            }
+        }
 
         Some(CausalTrace {
             constraint,

@@ -1,9 +1,14 @@
+pub mod arch;
 pub mod confidence;
 pub mod error;
 pub mod evidence;
 pub mod ir;
 pub mod version;
 
+pub use arch::{
+    evaluate_applicability, match_architecture, Architecture, ArchitectureMatch,
+    EnvironmentApplicability,
+};
 pub use confidence::Confidence;
 pub use error::{ConcordError, Result};
 pub use evidence::{Evidence, EvidenceSource};
@@ -58,6 +63,7 @@ mod tests {
                 ),
                 additional_evidence: vec![],
                 platform: None,
+                arch: None,
             }],
             declared_ports: vec![8000],
             env_vars: vec!["DATABASE_URL".to_string()],

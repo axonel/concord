@@ -20,6 +20,7 @@ pub struct CMakeCommand {
     pub args: Vec<String>,
     pub line_no: usize,
     pub platform: Option<String>,
+    pub arch: Option<String>,
     pub is_guarded_optional: bool,
 }
 
@@ -136,6 +137,7 @@ fn strip_cmake_comments(content: &str) -> String {
 #[derive(Debug, Clone)]
 struct ConditionScope {
     platform: Option<String>,
+    arch: Option<String>,
     is_optional: bool,
 }
 
@@ -238,30 +240,34 @@ pub fn parse_cmake_commands(
 
                 // Manage condition stack
                 if cmd_lower == "if" {
-                    let (plat, opt) = eval_condition(&tokens, known_options);
+                    let (plat, arch, opt) = eval_condition(&tokens, known_options);
                     condition_stack.push(ConditionScope {
                         platform: plat,
+                        arch,
                         is_optional: opt,
                     });
                 } else if cmd_lower == "elseif" {
                     if let Some(scope) = condition_stack.last_mut() {
-                        let (plat, opt) = eval_condition(&tokens, known_options);
+                        let (plat, arch, opt) = eval_condition(&tokens, known_options);
                         scope.platform = plat;
+                        scope.arch = arch;
                         scope.is_optional = opt;
                     }
                 } else if cmd_lower == "else" {
                     if let Some(scope) = condition_stack.last_mut() {
                         scope.platform = None;
+                        scope.arch = None;
                     }
                 } else if cmd_lower == "endif" {
                     condition_stack.pop();
                 }
 
-                // Determine active platform and optionality from condition stack
+                // Determine active platform, arch, and optionality from condition stack
                 let active_platform = condition_stack
                     .iter()
                     .rev()
                     .find_map(|s| s.platform.clone());
+                let active_arch = condition_stack.iter().rev().find_map(|s| s.arch.clone());
                 let is_guarded_optional = condition_stack.iter().any(|s| s.is_optional);
 
                 commands.push(CMakeCommand {
@@ -269,6 +275,7 @@ pub fn parse_cmake_commands(
                     args: tokens,
                     line_no: start_line,
                     platform: active_platform,
+                    arch: active_arch,
                     is_guarded_optional,
                 });
             }
@@ -280,11 +287,11 @@ pub fn parse_cmake_commands(
     commands
 }
 
-/// Evaluates condition tokens for platform guards and optionality based on option defaults.
+/// Evaluates condition tokens for platform and architecture guards and optionality based on option defaults.
 fn eval_condition(
     tokens: &[String],
     known_options: &HashMap<String, bool>,
-) -> (Option<String>, bool) {
+) -> (Option<String>, Option<String>, bool) {
     let joined = tokens.join(" ").to_uppercase();
 
     let mut platform = None;
@@ -306,6 +313,29 @@ fn eval_condition(
         platform = Some("android".to_string());
     }
 
+    let mut arch = None;
+    if (joined.contains("X86_64") || joined.contains("AMD64") || joined.contains("X64"))
+        && !joined.contains("NOT X86_64")
+        && !joined.contains("NOT AMD64")
+    {
+        arch = Some("x86_64".to_string());
+    } else if (joined.contains("AARCH64") || joined.contains("ARM64"))
+        && !joined.contains("NOT AARCH64")
+        && !joined.contains("NOT ARM64")
+    {
+        arch = Some("aarch64".to_string());
+    } else if (joined.contains("ARMV7") || joined.contains("ARMHF"))
+        && !joined.contains("NOT ARMV7")
+    {
+        arch = Some("armv7".to_string());
+    } else if joined.contains("RISCV64") && !joined.contains("NOT RISCV64") {
+        arch = Some("riscv64".to_string());
+    } else if (joined.contains("PPC64LE") || joined.contains("PPC64EL"))
+        && !joined.contains("NOT PPC64LE")
+    {
+        arch = Some("ppc64le".to_string());
+    }
+
     let mut is_optional = false;
     for token in tokens {
         if let Some(&is_enabled) = known_options.get(token) {
@@ -316,7 +346,7 @@ fn eval_condition(
         }
     }
 
-    (platform, is_optional)
+    (platform, arch, is_optional)
 }
 
 /// Parse options from CMake files: `option(<VAR> "<help_text>" [value])` and `set(<VAR> <VAL> CACHE ...)`.
@@ -530,6 +560,7 @@ pub fn extract_fallback_chains(
                 struct CandidateAlt {
                     name: String,
                     platform: Option<String>,
+                    arch: Option<String>,
                 }
                 let mut candidates: Vec<CandidateAlt> = Vec::new();
                 let mut set_vars: Vec<String> = Vec::new();
@@ -543,6 +574,19 @@ pub fn extract_fallback_chains(
                             branch_plat = Some("windows".to_string());
                         } else if joined_cond.contains("APPLE") || joined_cond.contains("DARWIN") {
                             branch_plat = Some("darwin".to_string());
+                        }
+
+                        let mut branch_arch = None;
+                        if (joined_cond.contains("X86_64") || joined_cond.contains("AMD64"))
+                            && !joined_cond.contains("NOT X86_64")
+                            && !joined_cond.contains("NOT AMD64")
+                        {
+                            branch_arch = Some("x86_64".to_string());
+                        } else if (joined_cond.contains("AARCH64") || joined_cond.contains("ARM64"))
+                            && !joined_cond.contains("NOT AARCH64")
+                            && !joined_cond.contains("NOT ARM64")
+                        {
+                            branch_arch = Some("aarch64".to_string());
                         }
 
                         let mut branch_has_found = false;
@@ -569,6 +613,7 @@ pub fn extract_fallback_chains(
                                         candidates.push(CandidateAlt {
                                             name: norm_name,
                                             platform: p_plat,
+                                            arch: branch_arch.clone(),
                                         });
                                     }
                                     branch_has_found = true;
@@ -603,6 +648,7 @@ pub fn extract_fallback_chains(
                                             candidates.push(CandidateAlt {
                                                 name: val_lower,
                                                 platform: Some("windows".to_string()),
+                                                arch: branch_arch.clone(),
                                             });
                                         } else if val_lower == "securetransport"
                                             && !candidates.iter().any(|c| c.name == val_lower)
@@ -610,11 +656,13 @@ pub fn extract_fallback_chains(
                                             candidates.push(CandidateAlt {
                                                 name: val_lower,
                                                 platform: Some("darwin".to_string()),
+                                                arch: branch_arch.clone(),
                                             });
                                         } else if !candidates.iter().any(|c| c.name == val_lower) {
                                             candidates.push(CandidateAlt {
                                                 name: val_lower,
                                                 platform: branch_plat.clone(),
+                                                arch: branch_arch.clone(),
                                             });
                                         }
                                     }
@@ -669,6 +717,9 @@ pub fn extract_fallback_chains(
                         );
                         if let Some(ref plat) = cand.platform {
                             req = req.with_platform(plat);
+                        }
+                        if let Some(ref a) = cand.arch {
+                            req = req.with_arch(a);
                         }
                         alt_reqs.push(req);
                         absorbed_packages.push(cand.name.clone());
@@ -995,7 +1046,7 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
     let mut cuda_standard: Option<String> = None;
 
     // Track packages and system libraries
-    type PackageKey = (String, Option<String>);
+    type PackageKey = (String, Option<String>, Option<String>);
     type PackageEntry = (ToolScope, Evidence, Option<VersionConstraint>);
     let mut seen_packages: BTreeMap<PackageKey, PackageEntry> = BTreeMap::new();
     let mut seen_python_components: BTreeMap<String, (ToolScope, Evidence)> = BTreeMap::new();
@@ -1311,7 +1362,7 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                                 Confidence::High,
                                 format!("Build tool 'pkg-config' declared via CMake find_package ({:?})", scope),
                             );
-                            requirements.push(ProjectRequirement::new(
+                            let mut req = ProjectRequirement::new(
                                 "pkg-config",
                                 RequirementKind::BuildTool {
                                     name: "pkg-config".to_string(),
@@ -1319,7 +1370,14 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                                     scope,
                                 },
                                 ev.clone(),
-                            ));
+                            );
+                            if let Some(ref p) = cmd.platform {
+                                req = req.with_platform(p.clone());
+                            }
+                            if let Some(ref a) = cmd.arch {
+                                req = req.with_arch(a.clone());
+                            }
+                            requirements.push(req);
                             evidence.push(ev);
                         } else if ToolKind::classify(&pkg_lower) == ToolKind::CodeGenerator {
                             let ev = Evidence::new(
@@ -1349,6 +1407,9 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                             if let Some(ref p) = cmd.platform {
                                 req = req.with_platform(p.clone());
                             }
+                            if let Some(ref a) = cmd.arch {
+                                req = req.with_arch(a.clone());
+                            }
                             requirements.push(req);
                             evidence.push(ev);
                         } else {
@@ -1369,7 +1430,7 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                                 ),
                             );
 
-                            let key = (pkg_lower, cmd.platform.clone());
+                            let key = (pkg_lower, cmd.platform.clone(), cmd.arch.clone());
                             if let Some(existing) = seen_packages.get_mut(&key) {
                                 if existing.0 == ToolScope::Optional
                                     && scope == ToolScope::RequiredForBuild
@@ -1438,7 +1499,11 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                             ),
                         );
 
-                        let key = (first_lib.to_lowercase(), cmd.platform.clone());
+                        let key = (
+                            first_lib.to_lowercase(),
+                            cmd.platform.clone(),
+                            cmd.arch.clone(),
+                        );
                         if let Some(existing) = seen_packages.get_mut(&key) {
                             if existing.0 == ToolScope::Optional
                                 && scope == ToolScope::RequiredForBuild
@@ -1548,6 +1613,9 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                         if let Some(ref p) = cmd.platform {
                             req = req.with_platform(p.clone());
                         }
+                        if let Some(ref a) = cmd.arch {
+                            req = req.with_arch(a.clone());
+                        }
                         requirements.push(req);
                         evidence.push(ev);
                     } else if candidate_names.len() > 1 {
@@ -1613,6 +1681,9 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                         );
                         if let Some(ref p) = cmd.platform {
                             req = req.with_platform(p.clone());
+                        }
+                        if let Some(ref a) = cmd.arch {
+                            req = req.with_arch(a.clone());
                         }
                         requirements.push(req);
                         evidence.push(ev);
@@ -1724,7 +1795,7 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                 *scope = ToolScope::RequiredForBuild;
             }
         } else {
-            for ((pkg, _), (scope, _, _)) in &mut seen_packages {
+            for ((pkg, _, _), (scope, _, _)) in &mut seen_packages {
                 if pkg.eq_ignore_ascii_case(g) {
                     *scope = ToolScope::RequiredForBuild;
                 }
@@ -1769,7 +1840,7 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
     }
 
     // 6. Assemble packages and system libraries
-    for ((pkg_name, platform), (scope, ev, constraint)) in seen_packages {
+    for ((pkg_name, platform, arch), (scope, ev, constraint)) in seen_packages {
         if absorbed_packages.contains(&pkg_name.to_lowercase()) {
             continue;
         }
@@ -1785,6 +1856,9 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
         );
         if let Some(p) = platform {
             req = req.with_platform(p);
+        }
+        if let Some(a) = arch {
+            req = req.with_arch(a);
         }
         requirements.push(req);
         evidence.push(ev);
@@ -2255,5 +2329,36 @@ find_package(FLEX REQUIRED)
             }
             _ => panic!("Expected CodeGenerator for flex"),
         }
+    }
+
+    #[test]
+    fn test_cmake_arch_guards() {
+        let dir = tempdir().unwrap();
+        let cmake_content = r#"
+cmake_minimum_required(VERSION 3.10)
+project(arch_sample C)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+    find_package(IntelIPP REQUIRED)
+endif()
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+    find_package(ArmCompute REQUIRED)
+endif()
+"#;
+        fs::write(dir.path().join("CMakeLists.txt"), cmake_content).unwrap();
+
+        let disc = analyze_cmake(dir.path());
+        let ipp = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "intelipp")
+            .expect("intelipp missing");
+        assert_eq!(ipp.arch.as_deref(), Some("x86_64"));
+
+        let arm = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "armcompute")
+            .expect("armcompute missing");
+        assert_eq!(arm.arch.as_deref(), Some("aarch64"));
     }
 }

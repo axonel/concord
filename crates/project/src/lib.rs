@@ -36,8 +36,8 @@ enum EntityKey {
     Other(String),
 }
 
-fn get_entity_key(req: &ProjectRequirement) -> EntityKey {
-    match &req.kind {
+fn get_entity_key(req: &ProjectRequirement) -> (EntityKey, Option<String>, Option<String>) {
+    let base = match &req.kind {
         RequirementKind::Runtime { name, .. } => EntityKey::Runtime(name.to_lowercase()),
         RequirementKind::PackageManager { name, .. } => {
             EntityKey::PackageManager(name.to_lowercase())
@@ -63,7 +63,14 @@ fn get_entity_key(req: &ProjectRequirement) -> EntityKey {
             EntityKey::Capability(capability.to_lowercase())
         }
         _ => EntityKey::Other(req.name.clone()),
-    }
+    };
+    let plat_key = req.platform.as_deref().map(|s| s.trim().to_lowercase());
+    let arch_key = req.arch.as_deref().map(|s| {
+        concord_core::arch::Architecture::normalize_from_str(s)
+            .canonical_name()
+            .to_string()
+    });
+    (base, plat_key, arch_key)
 }
 
 /// Consolidate requirements across all configuration sources deterministically.
@@ -72,7 +79,7 @@ fn get_entity_key(req: &ProjectRequirement) -> EntityKey {
 /// and flags contradictory constraints as explicit conflict requirements.
 pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<ProjectRequirement> {
     let mut consolidated: Vec<ProjectRequirement> = Vec::new();
-    let mut key_map: HashMap<EntityKey, usize> = HashMap::new();
+    let mut key_map: HashMap<(EntityKey, Option<String>, Option<String>), usize> = HashMap::new();
     let mut conflicts: Vec<ProjectRequirement> = Vec::new();
 
     for req in requirements {

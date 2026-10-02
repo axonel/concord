@@ -47,7 +47,11 @@ pub fn verify_environment(
 
     // 2. Evaluated Constraints Checks
     for eval in evaluated_constraints {
-        let (name, category) = match &eval.constraint {
+        if eval.is_not_applicable() {
+            continue;
+        }
+
+        let (name, category) = match eval.constraint.inner_constraint() {
             Constraint::RuntimeVersion { runtime, .. } => {
                 (format!("runtime:{}", runtime), "runtime".to_string())
             }
@@ -109,6 +113,7 @@ pub fn verify_environment(
                 ),
                 "build_system".to_string(),
             ),
+            Constraint::EnvironmentGuarded { .. } => unreachable!(),
         };
 
         let passed = eval.is_satisfied();

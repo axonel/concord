@@ -1,5 +1,8 @@
 use crate::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use crate::version::matches_version_constraint;
+use concord_core::arch::{
+    evaluate_applicability, match_architecture, ArchitectureMatch, EnvironmentApplicability,
+};
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{
     MachineCapability, ProjectRequirement, RequirementKind, ServiceStatus, ToolKind,
@@ -11,7 +14,7 @@ use std::process::Command;
 
 /// Convert a ProjectRequirement into a Constraint.
 pub fn requirement_to_constraint(req: &ProjectRequirement) -> Option<Constraint> {
-    match &req.kind {
+    let base = match &req.kind {
         RequirementKind::Runtime { name, constraint } => Some(Constraint::RuntimeVersion {
             runtime: name.clone(),
             constraint: constraint.clone(),
@@ -126,6 +129,16 @@ pub fn requirement_to_constraint(req: &ProjectRequirement) -> Option<Constraint>
                 })
             }
         }
+    }?;
+
+    if req.platform.is_some() || req.arch.is_some() {
+        Some(Constraint::EnvironmentGuarded {
+            constraint: Box::new(base),
+            platform: req.platform.clone(),
+            arch: req.arch.clone(),
+        })
+    } else {
+        Some(base)
     }
 }
 
@@ -795,27 +808,40 @@ pub fn evaluate_constraint(
         }
 
         Constraint::ArchMatch { expected_arch } => {
-            if machine.arch.eq_ignore_ascii_case(expected_arch) {
-                EvaluatedConstraint {
+            match match_architecture(expected_arch, &machine.arch) {
+                ArchitectureMatch::Matches => EvaluatedConstraint {
                     constraint: constraint.clone(),
                     status: ConstraintStatus::Satisfied,
                     project_evidence,
                     machine_evidence: None,
+                },
+                ArchitectureMatch::Mismatch => {
+                    let reason = format!(
+                        "Architecture mismatch: expected '{}', machine is '{}'",
+                        expected_arch, machine.arch
+                    );
+                    let root_cause_hint = "arch.mismatch".to_string();
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: None,
+                    }
                 }
-            } else {
-                let reason = format!(
-                    "Architecture mismatch: expected '{}', machine is '{}'",
-                    expected_arch, machine.arch
-                );
-                let root_cause_hint = "arch.mismatch".to_string();
-                EvaluatedConstraint {
-                    constraint: constraint.clone(),
-                    status: ConstraintStatus::Violated {
-                        reason,
-                        root_cause_hint,
-                    },
-                    project_evidence,
-                    machine_evidence: None,
+                ArchitectureMatch::Unknown => {
+                    let reason = format!(
+                        "Architecture match cannot be determined: expected '{}', machine is '{}'",
+                        expected_arch, machine.arch
+                    );
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Unknown { reason },
+                        project_evidence,
+                        machine_evidence: None,
+                    }
                 }
             }
         }
@@ -1421,45 +1447,59 @@ pub fn evaluate_constraint(
             let mut satisfied_alts = Vec::new();
             let mut unknown_alts = Vec::new();
             let mut violated_reasons = Vec::new();
+            let mut not_applicable_alts = Vec::new();
 
-            for sub_c in constraints {
-                // Ensure alternative probe tests active presence
-                let probe_c = match sub_c {
+            fn with_required_scope(c: &Constraint) -> Constraint {
+                match c {
                     Constraint::SystemLibraryAvailable {
                         name,
                         header,
-                        constraint: c,
+                        constraint,
                         ..
                     } => Constraint::SystemLibraryAvailable {
                         name: name.clone(),
                         header: header.clone(),
-                        constraint: c.clone(),
+                        constraint: constraint.clone(),
                         scope: ToolScope::RequiredForBuild,
                     },
                     Constraint::ToolAvailable {
                         name,
                         kind,
-                        constraint: c,
+                        constraint,
                         ..
                     } => Constraint::ToolAvailable {
                         name: name.clone(),
                         kind: *kind,
-                        constraint: c.clone(),
+                        constraint: constraint.clone(),
                         scope: ToolScope::RequiredForBuild,
                     },
                     Constraint::LanguagePackageAvailable {
                         language,
                         package,
-                        constraint: c,
+                        constraint,
                         ..
                     } => Constraint::LanguagePackageAvailable {
                         language: language.clone(),
                         package: package.clone(),
-                        constraint: c.clone(),
+                        constraint: constraint.clone(),
                         scope: ToolScope::RequiredForBuild,
                     },
+                    Constraint::EnvironmentGuarded {
+                        constraint: inner,
+                        platform,
+                        arch,
+                    } => Constraint::EnvironmentGuarded {
+                        constraint: Box::new(with_required_scope(inner)),
+                        platform: platform.clone(),
+                        arch: arch.clone(),
+                    },
                     other => other.clone(),
-                };
+                }
+            }
+
+            for sub_c in constraints {
+                // Ensure alternative probe tests active presence
+                let probe_c = with_required_scope(sub_c);
 
                 let eval = evaluate_constraint(&probe_c, machine, None);
                 match &eval.status {
@@ -1471,6 +1511,9 @@ pub fn evaluate_constraint(
                     }
                     ConstraintStatus::Violated { reason, .. } => {
                         violated_reasons.push(format!("{}: {}", sub_c, reason));
+                    }
+                    ConstraintStatus::NotApplicable { reason } => {
+                        not_applicable_alts.push((sub_c, reason.clone()));
                     }
                 }
             }
@@ -1508,6 +1551,19 @@ pub fn evaluate_constraint(
                     project_evidence,
                     machine_evidence: None,
                 }
+            } else if violated_reasons.is_empty() && !not_applicable_alts.is_empty() {
+                EvaluatedConstraint {
+                    constraint: constraint.clone(),
+                    status: ConstraintStatus::NotApplicable {
+                        reason: format!(
+                            "No applicable provider for capability '{}' on current host architecture/platform ({} alternative(s) scoped to other environments)",
+                            capability,
+                            not_applicable_alts.len()
+                        ),
+                    },
+                    project_evidence,
+                    machine_evidence: None,
+                }
             } else {
                 let reason = format!(
                     "No provider satisfied for capability '{}' (scope: {:?}). Tried: [{}]",
@@ -1524,6 +1580,47 @@ pub fn evaluate_constraint(
                     },
                     project_evidence,
                     machine_evidence: None,
+                }
+            }
+        }
+
+        Constraint::EnvironmentGuarded {
+            constraint: inner,
+            platform,
+            arch,
+        } => {
+            let (applicability, reason) = evaluate_applicability(
+                platform.as_deref(),
+                arch.as_deref(),
+                &machine.os,
+                &machine.os_family,
+                &machine.arch,
+            );
+            match applicability {
+                EnvironmentApplicability::NotApplicable => EvaluatedConstraint {
+                    constraint: constraint.clone(),
+                    status: ConstraintStatus::NotApplicable {
+                        reason: reason.unwrap_or_else(|| {
+                            "Requirement is not applicable to current environment".to_string()
+                        }),
+                    },
+                    project_evidence,
+                    machine_evidence: None,
+                },
+                EnvironmentApplicability::Unknown => EvaluatedConstraint {
+                    constraint: constraint.clone(),
+                    status: ConstraintStatus::Unknown {
+                        reason: reason.unwrap_or_else(|| {
+                            "Requirement applicability cannot be determined".to_string()
+                        }),
+                    },
+                    project_evidence,
+                    machine_evidence: None,
+                },
+                EnvironmentApplicability::Applicable => {
+                    let mut eval = evaluate_constraint(inner, machine, project_evidence);
+                    eval.constraint = constraint.clone();
+                    eval
                 }
             }
         }
@@ -1627,12 +1724,7 @@ pub fn requirement_to_constraint_with_project(
     project: Option<&concord_core::ir::ProjectManifest>,
     machine: &MachineCapability,
 ) -> Option<Constraint> {
-    if let Some(ref plat) = req.platform {
-        if !machine.os.to_lowercase().contains(&plat.to_lowercase()) {
-            return None;
-        }
-    }
-    match &req.kind {
+    let base = match &req.kind {
         RequirementKind::Service { name, min_version } => {
             if let Some(proj) = project {
                 if let Some((compose_proj, compose_svc)) =
@@ -1679,20 +1771,25 @@ pub fn requirement_to_constraint_with_project(
                         ("running".to_string(), "not-created".to_string())
                     };
 
-                    return Some(Constraint::ComposeServiceState {
+                    Some(Constraint::ComposeServiceState {
                         compose_file: compose_proj.file_path.clone(),
                         service_name: compose_svc.name.clone(),
                         container_name: compose_svc.container_name.clone(),
                         expected_state,
                         actual_state,
-                    });
+                    })
+                } else {
+                    Some(Constraint::ServiceRunning {
+                        service: name.clone(),
+                        min_version: min_version.clone(),
+                    })
                 }
+            } else {
+                Some(Constraint::ServiceRunning {
+                    service: name.clone(),
+                    min_version: min_version.clone(),
+                })
             }
-
-            Some(Constraint::ServiceRunning {
-                service: name.clone(),
-                min_version: min_version.clone(),
-            })
         }
         RequirementKind::AnyOf {
             capability,
@@ -1713,7 +1810,21 @@ pub fn requirement_to_constraint_with_project(
                 })
             }
         }
-        _ => requirement_to_constraint(req),
+        _ => return requirement_to_constraint(req),
+    }?;
+
+    if req.platform.is_some() || req.arch.is_some() {
+        if matches!(base, Constraint::EnvironmentGuarded { .. }) {
+            Some(base)
+        } else {
+            Some(Constraint::EnvironmentGuarded {
+                constraint: Box::new(base),
+                platform: req.platform.clone(),
+                arch: req.arch.clone(),
+            })
+        }
+    } else {
+        Some(base)
     }
 }
 

@@ -240,6 +240,8 @@ pub struct ProjectRequirement {
     pub additional_evidence: Vec<Evidence>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
 }
 
 impl ProjectRequirement {
@@ -250,11 +252,17 @@ impl ProjectRequirement {
             evidence,
             additional_evidence: Vec::new(),
             platform: None,
+            arch: None,
         }
     }
 
     pub fn with_platform(mut self, platform: impl Into<String>) -> Self {
         self.platform = Some(platform.into());
+        self
+    }
+
+    pub fn with_arch(mut self, arch: impl Into<String>) -> Self {
+        self.arch = Some(arch.into());
         self
     }
 }

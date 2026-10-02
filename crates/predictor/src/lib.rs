@@ -57,7 +57,7 @@ pub fn predict_failures(
             root_cause_hint,
         } = &eval.status
         {
-            match &eval.constraint {
+            match eval.constraint.inner_constraint() {
                 Constraint::RuntimeVersion {
                     runtime,
                     constraint,
@@ -696,6 +696,7 @@ pub fn predict_failures(
                         });
                     }
                 }
+                Constraint::EnvironmentGuarded { .. } => unreachable!(),
             }
         }
 
@@ -741,7 +742,10 @@ pub fn predict_failures(
         let found_existing = if is_compose_missing {
             deduped.iter_mut().find(|e| {
                 if e.category == PredictionCategory::ComposeConfigMissing {
-                    match (&e.constraint, &p.constraint) {
+                    match (
+                        e.constraint.inner_constraint(),
+                        p.constraint.inner_constraint(),
+                    ) {
                         (
                             Constraint::ComposeConfigUnresolved {
                                 compose_file: f1,

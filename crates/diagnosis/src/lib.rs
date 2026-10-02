@@ -36,7 +36,8 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
     for pred in predictions {
         let matching_trace = traces.iter().find(|t| t.constraint == pred.constraint);
 
-        let (root_cause, causal_chain) = match &pred.constraint {
+        let effective_constraint = pred.constraint.inner_constraint();
+        let (root_cause, mut causal_chain) = match effective_constraint {
             Constraint::RuntimeVersion {
                 runtime,
                 constraint,
@@ -654,7 +655,27 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                     )
                 }
             }
+            Constraint::EnvironmentGuarded { .. } => unreachable!(),
         };
+
+        if let Some((plat, arch)) = pred.constraint.environment_guard() {
+            let mut guard_desc = Vec::new();
+            if let Some(ref p) = plat {
+                guard_desc.push(format!("platform '{}'", p));
+            }
+            if let Some(ref a) = arch {
+                guard_desc.push(format!("architecture '{}'", a));
+            }
+            if !guard_desc.is_empty() {
+                causal_chain.insert(
+                    0,
+                    format!(
+                        "Requirement active: condition {} matched host environment",
+                        guard_desc.join(" and ")
+                    ),
+                );
+            }
+        }
 
         let final_root_cause = matching_trace
             .and_then(|t| t.root_cause.clone())

@@ -2000,6 +2000,7 @@ fn test_dynamic_tool_probing_end_to_end() {
             ),
             additional_evidence: vec![],
             platform: None,
+            arch: None,
         }],
         declared_ports: vec![],
         env_vars: vec![],

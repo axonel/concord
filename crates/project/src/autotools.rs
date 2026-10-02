@@ -421,6 +421,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
                     evidence: ev,
                     additional_evidence: vec![],
                     platform: None,
+                    arch: None,
                 });
             }
             "AC_PROG_CXX" => {
@@ -450,6 +451,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
                     evidence: ev,
                     additional_evidence: vec![],
                     platform: None,
+                    arch: None,
                 });
             }
             "AC_PROG_YACC" => {
@@ -617,6 +619,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
             evidence: ev,
             additional_evidence: vec![],
             platform: None,
+            arch: None,
         });
     }
 
@@ -641,6 +644,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
             evidence: ev,
             additional_evidence: vec![],
             platform: None,
+            arch: None,
         });
     }
 
@@ -689,6 +693,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
             evidence: ev,
             additional_evidence: vec![],
             platform: None,
+            arch: None,
         });
     }
 
@@ -839,6 +844,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
                 evidence: ev,
                 additional_evidence: vec![],
                 platform: None,
+                arch: None,
             });
         }
     }
@@ -878,6 +884,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
                     evidence: ev,
                     additional_evidence: vec![],
                     platform: None,
+                    arch: None,
                 });
             }
             ExtractedItem::SearchLibs {
@@ -948,6 +955,7 @@ pub fn analyze_autotools(dir: &Path) -> AutotoolsDiscovery {
                     evidence: ev,
                     additional_evidence: vec![],
                     platform: None,
+                    arch: None,
                 });
             }
         }
