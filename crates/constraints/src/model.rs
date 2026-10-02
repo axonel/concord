@@ -67,11 +67,13 @@ pub enum Constraint {
         expected_state: String,
         actual_state: String,
     },
-    /// A compiler for the specified language must be available and satisfy standards/constraints.
+    /// A compiler for the specified language must be available and satisfy standards/constraints/targets.
     CompilerAvailable {
         language: String,
         min_standard: Option<String>,
         constraint: Option<VersionConstraint>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<String>,
     },
     /// A language package/module must be importable in the runtime environment.
     LanguagePackageAvailable {
@@ -168,7 +170,12 @@ impl fmt::Display for Constraint {
                 language,
                 min_standard,
                 constraint,
+                target,
             } => {
+                let target_str = target
+                    .as_ref()
+                    .map(|t| format!(" targeting '{}'", t))
+                    .unwrap_or_default();
                 let std_str = min_standard
                     .as_ref()
                     .map(|s| format!(" standard {}", s))
@@ -179,8 +186,8 @@ impl fmt::Display for Constraint {
                     .unwrap_or_default();
                 write!(
                     f,
-                    "Compiler for '{}'{}{} must be available",
-                    language, std_str, ver_str
+                    "Compiler for '{}'{}{}{} must be available",
+                    language, target_str, std_str, ver_str
                 )
             }
             Self::LanguagePackageAvailable {

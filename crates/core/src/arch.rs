@@ -83,6 +83,22 @@ impl Architecture {
     pub fn is_recognized(&self) -> bool {
         !matches!(self, Self::Other(_))
     }
+
+    /// Extracts the target Architecture from a standard target triple string
+    /// (e.g. "x86_64-linux-gnu" -> X86_64, "aarch64-linux-gnu" -> Aarch64, "arm-none-eabi" -> Armv7).
+    pub fn from_target_triple(triple: &str) -> Option<Self> {
+        let clean = triple.trim().to_lowercase();
+        if clean.is_empty() {
+            return None;
+        }
+        let arch_part = clean.split('-').next().unwrap_or(&clean);
+        let norm = Self::normalize_from_str(arch_part);
+        if norm.is_recognized() {
+            Some(norm)
+        } else {
+            Some(Self::Other(clean))
+        }
+    }
 }
 
 impl fmt::Display for Architecture {
@@ -126,6 +142,44 @@ pub fn match_architecture(expected: &str, machine_arch: &str) -> ArchitectureMat
                 ArchitectureMatch::Mismatch
             }
         }
+    }
+}
+
+/// Match a requested compiler target against an observed compiler target triple.
+pub fn match_compiler_target(
+    expected_target: &str,
+    observed_target_triple: &str,
+) -> ArchitectureMatch {
+    let exp_trimmed = expected_target.trim();
+    let obs_trimmed = observed_target_triple.trim();
+    if exp_trimmed.is_empty() || obs_trimmed.is_empty() {
+        return ArchitectureMatch::Unknown;
+    }
+
+    // Exact string match (e.g. "aarch64-linux-gnu" == "aarch64-linux-gnu")
+    if exp_trimmed.eq_ignore_ascii_case(obs_trimmed) {
+        return ArchitectureMatch::Matches;
+    }
+
+    // Extract architecture component from both
+    let exp_arch = Architecture::from_target_triple(exp_trimmed);
+    let obs_arch = Architecture::from_target_triple(obs_trimmed);
+
+    match (exp_arch, obs_arch) {
+        (Some(exp), Some(obs)) => {
+            if exp.is_recognized() && obs.is_recognized() {
+                if exp == obs {
+                    ArchitectureMatch::Matches
+                } else {
+                    ArchitectureMatch::Mismatch
+                }
+            } else if exp_trimmed.eq_ignore_ascii_case(obs_trimmed) {
+                ArchitectureMatch::Matches
+            } else {
+                ArchitectureMatch::Unknown
+            }
+        }
+        _ => ArchitectureMatch::Unknown,
     }
 }
 

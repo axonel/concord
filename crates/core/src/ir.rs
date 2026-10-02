@@ -206,6 +206,8 @@ pub enum RequirementKind {
         language: String,
         min_standard: Option<String>,
         constraint: Option<VersionConstraint>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<String>,
     },
     /// Language-specific package or module required at build-time or runtime (e.g. python module jinja2 or requests).
     LanguagePackage {
@@ -265,6 +267,17 @@ impl ProjectRequirement {
         self.arch = Some(arch.into());
         self
     }
+
+    pub fn with_compiler_target(mut self, target: impl Into<String>) -> Self {
+        if let RequirementKind::Compiler {
+            target: ref mut req_target,
+            ..
+        } = self.kind
+        {
+            *req_target = Some(target.into());
+        }
+        self
+    }
 }
 
 /// An installed runtime on the machine.
@@ -293,6 +306,27 @@ pub struct ToolObservation {
     pub version: Option<String>,
     pub executable_path: PathBuf,
     pub evidence: Evidence,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_triple: Option<String>,
+}
+
+impl ToolObservation {
+    /// Returns the target architecture family if this tool has an observable target triple.
+    pub fn target_arch(&self) -> Option<crate::arch::Architecture> {
+        self.target_triple
+            .as_deref()
+            .and_then(crate::arch::Architecture::from_target_triple)
+    }
+
+    /// Whether this tool is a cross-compiler whose target differs from the host architecture.
+    pub fn is_cross_compiler(&self, host_arch: &str) -> bool {
+        if let Some(target_arch) = self.target_arch() {
+            let host_norm = crate::arch::Architecture::normalize_from_str(host_arch);
+            target_arch.is_recognized() && host_norm.is_recognized() && target_arch != host_norm
+        } else {
+            false
+        }
+    }
 }
 
 /// Status of a local service or daemon.

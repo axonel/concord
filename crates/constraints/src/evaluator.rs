@@ -1,7 +1,8 @@
 use crate::model::{Constraint, ConstraintStatus, EvaluatedConstraint};
 use crate::version::matches_version_constraint;
 use concord_core::arch::{
-    evaluate_applicability, match_architecture, ArchitectureMatch, EnvironmentApplicability,
+    evaluate_applicability, match_architecture, match_compiler_target, Architecture,
+    ArchitectureMatch, EnvironmentApplicability,
 };
 use concord_core::evidence::{Evidence, EvidenceSource};
 use concord_core::ir::{
@@ -83,10 +84,12 @@ pub fn requirement_to_constraint(req: &ProjectRequirement) -> Option<Constraint>
             language,
             min_standard,
             constraint,
+            target,
         } => Some(Constraint::CompilerAvailable {
             language: language.clone(),
             min_standard: min_standard.clone(),
             constraint: constraint.clone(),
+            target: target.clone(),
         }),
         RequirementKind::LanguagePackage {
             language,
@@ -435,6 +438,46 @@ fn is_executable_file(path: &Path) -> bool {
     path.is_file()
 }
 
+/// Probes the target triple of a compiler binary if applicable.
+fn probe_compiler_target_in_path(exe_path: &Path, name: &str) -> Option<String> {
+    let lower = name.to_lowercase();
+    let is_compiler = lower == "gcc"
+        || lower == "g++"
+        || lower == "clang"
+        || lower == "clang++"
+        || lower == "cc"
+        || lower == "c++"
+        || lower == "gfortran"
+        || lower == "flang"
+        || lower.ends_with("-gcc")
+        || lower.ends_with("-g++")
+        || lower.ends_with("-clang")
+        || lower.ends_with("-clang++");
+
+    if !is_compiler {
+        return None;
+    }
+
+    if let Ok(output) = Command::new(exe_path).arg("-dumpmachine").output() {
+        if output.status.success() {
+            let out_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !out_str.is_empty() {
+                return Some(out_str);
+            }
+        }
+    }
+
+    for suffix in ["-gcc", "-g++", "-clang", "-clang++"] {
+        if let Some(prefix) = lower.strip_suffix(suffix) {
+            if prefix.contains('-') {
+                return Some(prefix.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 /// Dynamically probe a tool in the machine's path entries if not pre-scanned.
 pub fn probe_tool_in_paths(
     name: &str,
@@ -500,6 +543,8 @@ pub fn probe_tool_in_paths(
         _ => (None, "dynamically probed executable".to_string()),
     };
 
+    let target_triple = probe_compiler_target_in_path(&candidate, name);
+
     let evidence = Evidence::new(
         EvidenceSource::DynamicProbe {
             target: candidate.display().to_string(),
@@ -525,6 +570,7 @@ pub fn probe_tool_in_paths(
         version: ver,
         executable_path: candidate,
         evidence,
+        target_triple,
     })
 }
 
@@ -1051,8 +1097,26 @@ pub fn evaluate_constraint(
             language,
             min_standard,
             constraint: req_constraint,
+            target,
         } => {
-            let candidates: &[&str] = match language.to_lowercase().as_str() {
+            // Check if required target is dynamic or unresolvable
+            if let Some(ref req_tgt) = target {
+                if req_tgt.starts_with("dynamic:") || req_tgt == "unknown" {
+                    return EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Unknown {
+                            reason: format!(
+                                "Compiler target for '{}' is dynamic or unresolvable ('{}')",
+                                language, req_tgt
+                            ),
+                        },
+                        project_evidence,
+                        machine_evidence: None,
+                    };
+                }
+            }
+
+            let base_candidates: &[&str] = match language.to_lowercase().as_str() {
                 "c" => &["gcc", "clang", "cc"],
                 "cpp" | "c++" | "cxx" => &["g++", "clang++", "c++", "gcc", "clang"],
                 "cuda" | "cu" => &["nvcc", "clang++", "clang"],
@@ -1061,79 +1125,171 @@ pub fn evaluate_constraint(
                 _ => &[language.as_str()],
             };
 
-            let mut found_tool = None;
-            for cand in candidates {
-                if let Some(tool) = machine.find_tool(cand) {
-                    found_tool = Some(tool.clone());
-                    break;
+            // Build list of candidate tool names to search for
+            let mut search_names = Vec::new();
+            if let Some(ref req_tgt) = target {
+                for base in base_candidates {
+                    search_names.push(format!("{}-{}", req_tgt, base));
+                }
+            }
+            for base in base_candidates {
+                search_names.push(base.to_string());
+            }
+
+            // Gather candidate tools from machine.tools and dynamic probe on PATH
+            let mut candidate_tools: Vec<ToolObservation> = Vec::new();
+            let mut seen_paths = std::collections::HashSet::new();
+
+            // First check explicit search names
+            for name in &search_names {
+                if let Some(tool) = machine.find_tool(name) {
+                    if seen_paths.insert(tool.executable_path.clone()) {
+                        candidate_tools.push(tool.clone());
+                    }
                 } else if let Some(tool) =
-                    probe_tool_in_paths(cand, ToolKind::BuildTool, &machine.path_entries)
+                    probe_tool_in_paths(name, ToolKind::BuildTool, &machine.path_entries)
                 {
-                    found_tool = Some(tool);
-                    break;
+                    if seen_paths.insert(tool.executable_path.clone()) {
+                        candidate_tools.push(tool);
+                    }
                 }
             }
 
-            if let Some(tool) = found_tool {
-                let mut satisfied = true;
-                let mut fail_reason = None;
+            // Also check all machine.tools for any tools whose name matches base compiler candidates
+            for tool in &machine.tools {
+                let lower_name = tool.name.to_lowercase();
+                let matches_lang = base_candidates.iter().any(|b| {
+                    lower_name == *b
+                        || lower_name.ends_with(&format!("-{}", b))
+                        || lower_name.contains(b)
+                });
+                if matches_lang && seen_paths.insert(tool.executable_path.clone()) {
+                    candidate_tools.push(tool.clone());
+                }
+            }
 
-                if let Some(req_c) = req_constraint {
-                    if let Some(ref ver) = tool.version {
-                        if !req_c.matches(ver) {
-                            satisfied = false;
-                            fail_reason = Some(format!(
-                                "Compiler '{}' version {} does not satisfy requirement {}",
-                                tool.name, ver, req_c
-                            ));
+            // Categorize candidates by target compatibility
+            let mut matching_tools = Vec::new();
+            let mut target_mismatch_tools = Vec::new();
+            let mut target_unknown_tools = Vec::new();
+
+            for tool in candidate_tools {
+                let target_match = match target {
+                    None => {
+                        // Native build requires compiler targeting host machine
+                        if tool.is_cross_compiler(&machine.arch) {
+                            ArchitectureMatch::Mismatch
+                        } else {
+                            ArchitectureMatch::Matches
                         }
                     }
-                }
+                    Some(ref req_tgt) => {
+                        if let Some(ref obs_triple) = tool.target_triple {
+                            match_compiler_target(req_tgt, obs_triple)
+                        } else {
+                            // Extract prefix from tool name if present (e.g., aarch64-linux-gnu-gcc)
+                            let mut inferred_prefix = None;
+                            let lower = tool.name.to_lowercase();
+                            for base in base_candidates {
+                                let suffix = format!("-{}", base);
+                                if let Some(p) = lower.strip_suffix(&suffix) {
+                                    if p.contains('-') {
+                                        inferred_prefix = Some(p.to_string());
+                                        break;
+                                    }
+                                }
+                            }
 
-                if satisfied {
-                    if let Some(ref std_name) = min_standard {
-                        let (supported, detail) = compiler_supports_standard(
-                            &tool.name,
-                            language,
-                            std_name,
-                            tool.version.as_deref(),
-                        );
-                        if !supported {
-                            satisfied = false;
-                            fail_reason = detail;
+                            if let Some(ref p) = inferred_prefix {
+                                match_compiler_target(req_tgt, p)
+                            } else {
+                                // Default bare compiler assumed to target host machine arch
+                                let req_arch = Architecture::from_target_triple(req_tgt);
+                                let host_arch = Architecture::normalize_from_str(&machine.arch);
+                                match (req_arch, host_arch) {
+                                    (Some(req_a), host_a)
+                                        if req_a.is_recognized() && host_a.is_recognized() =>
+                                    {
+                                        if req_a == host_a {
+                                            ArchitectureMatch::Matches
+                                        } else {
+                                            ArchitectureMatch::Mismatch
+                                        }
+                                    }
+                                    _ => {
+                                        if req_tgt.eq_ignore_ascii_case(&machine.arch) {
+                                            ArchitectureMatch::Matches
+                                        } else {
+                                            ArchitectureMatch::Unknown
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                };
+
+                match target_match {
+                    ArchitectureMatch::Matches => matching_tools.push(tool),
+                    ArchitectureMatch::Mismatch => target_mismatch_tools.push(tool),
+                    ArchitectureMatch::Unknown => target_unknown_tools.push(tool),
+                }
+            }
+
+            if !matching_tools.is_empty() {
+                let mut best_failure_reason = None;
+                for tool in &matching_tools {
+                    let mut satisfied = true;
+                    let mut fail_reason = None;
+
+                    if let Some(req_c) = req_constraint {
+                        if let Some(ref ver) = tool.version {
+                            if !req_c.matches(ver) {
+                                satisfied = false;
+                                fail_reason = Some(format!(
+                                    "Compiler '{}' version {} does not satisfy requirement {}",
+                                    tool.name, ver, req_c
+                                ));
+                            }
+                        }
+                    }
+
+                    if satisfied {
+                        if let Some(ref std_name) = min_standard {
+                            let (supported, detail) = compiler_supports_standard(
+                                &tool.name,
+                                language,
+                                std_name,
+                                tool.version.as_deref(),
+                            );
+                            if !supported {
+                                satisfied = false;
+                                fail_reason = detail;
+                            }
+                        }
+                    }
+
+                    if satisfied {
+                        return EvaluatedConstraint {
+                            constraint: constraint.clone(),
+                            status: ConstraintStatus::Satisfied,
+                            project_evidence,
+                            machine_evidence: Some(tool.evidence.clone()),
+                        };
+                    } else if best_failure_reason.is_none() {
+                        best_failure_reason = fail_reason.or_else(|| {
+                            Some(format!(
+                                "Compiler '{}' does not satisfy requirements",
+                                tool.name
+                            ))
+                        });
+                    }
                 }
 
-                if satisfied {
-                    EvaluatedConstraint {
-                        constraint: constraint.clone(),
-                        status: ConstraintStatus::Satisfied,
-                        project_evidence,
-                        machine_evidence: Some(tool.evidence.clone()),
-                    }
-                } else {
-                    let reason = fail_reason.unwrap_or_else(|| {
-                        format!("Compiler '{}' does not satisfy requirements", tool.name)
-                    });
-                    let root_cause_hint = format!("{}.compiler_incompatible", language);
-                    EvaluatedConstraint {
-                        constraint: constraint.clone(),
-                        status: ConstraintStatus::Violated {
-                            reason,
-                            root_cause_hint,
-                        },
-                        project_evidence,
-                        machine_evidence: Some(tool.evidence.clone()),
-                    }
-                }
-            } else {
-                let reason = format!(
-                    "No compiler found for language '{}' (checked: {})",
-                    language,
-                    candidates.join(", ")
-                );
-                let root_cause_hint = format!("{}.compiler_missing", language);
+                let reason = best_failure_reason.unwrap_or_else(|| {
+                    format!("Compiler for '{}' does not satisfy requirements", language)
+                });
+                let root_cause_hint = format!("{}.compiler_incompatible", language);
                 EvaluatedConstraint {
                     constraint: constraint.clone(),
                     status: ConstraintStatus::Violated {
@@ -1141,7 +1297,105 @@ pub fn evaluate_constraint(
                         root_cause_hint,
                     },
                     project_evidence,
-                    machine_evidence: None,
+                    machine_evidence: matching_tools.first().map(|t| t.evidence.clone()),
+                }
+            } else if !target_unknown_tools.is_empty() {
+                let unk_names: Vec<_> = target_unknown_tools
+                    .iter()
+                    .map(|t| t.name.as_str())
+                    .collect();
+                let target_desc = target.as_deref().unwrap_or("unknown");
+                EvaluatedConstraint {
+                    constraint: constraint.clone(),
+                    status: ConstraintStatus::Unknown {
+                        reason: format!(
+                            "Compiler target compatibility for '{}' ({}) cannot be verified against required target '{}'",
+                            language,
+                            unk_names.join(", "),
+                            target_desc
+                        ),
+                    },
+                    project_evidence,
+                    machine_evidence: target_unknown_tools.first().map(|t| t.evidence.clone()),
+                }
+            } else if !target_mismatch_tools.is_empty() {
+                if let Some(ref req_tgt) = target {
+                    let tool_names: Vec<_> = target_mismatch_tools
+                        .iter()
+                        .map(|t| t.name.as_str())
+                        .collect();
+                    let reason = format!(
+                        "Compiler for language '{}' found ({}), but none supports required target '{}'",
+                        language,
+                        tool_names.join(", "),
+                        req_tgt
+                    );
+                    let root_cause_hint = format!("{}.compiler_target_missing", language);
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: target_mismatch_tools.first().map(|t| t.evidence.clone()),
+                    }
+                } else {
+                    let tool_names: Vec<_> = target_mismatch_tools
+                        .iter()
+                        .map(|t| t.name.as_str())
+                        .collect();
+                    let reason = format!(
+                        "Compilers for language '{}' found ({}), but all are cross-compilers that cannot satisfy native host architecture '{}'",
+                        language,
+                        tool_names.join(", "),
+                        machine.arch
+                    );
+                    let root_cause_hint = format!("{}.compiler_missing", language);
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: target_mismatch_tools.first().map(|t| t.evidence.clone()),
+                    }
+                }
+            } else {
+                if let Some(ref req_tgt) = target {
+                    let reason = format!(
+                        "No compiler found for language '{}' targeting '{}' (checked: {})",
+                        language,
+                        req_tgt,
+                        search_names.join(", ")
+                    );
+                    let root_cause_hint = format!("{}.compiler_target_missing", language);
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: None,
+                    }
+                } else {
+                    let reason = format!(
+                        "No compiler found for language '{}' (checked: {})",
+                        language,
+                        search_names.join(", ")
+                    );
+                    let root_cause_hint = format!("{}.compiler_missing", language);
+                    EvaluatedConstraint {
+                        constraint: constraint.clone(),
+                        status: ConstraintStatus::Violated {
+                            reason,
+                            root_cause_hint,
+                        },
+                        project_evidence,
+                        machine_evidence: None,
+                    }
                 }
             }
         }
@@ -2499,12 +2753,14 @@ mod tests {
                 Confidence::Confirmed,
                 "NVCC compiler found",
             ),
+            target_triple: None,
         });
 
         let constraint = Constraint::CompilerAvailable {
             language: "cuda".to_string(),
             min_standard: Some("c++17".to_string()),
             constraint: None,
+            target: None,
         };
 
         let eval = evaluate_constraint(&constraint, &machine, None);
@@ -2528,12 +2784,14 @@ mod tests {
                 Confidence::Confirmed,
                 "NVCC compiler found",
             ),
+            target_triple: None,
         });
 
         let constraint = Constraint::CompilerAvailable {
             language: "cuda".to_string(),
             min_standard: Some("c++17".to_string()),
             constraint: None,
+            target: None,
         };
 
         let eval = evaluate_constraint(&constraint, &machine, None);
@@ -2557,6 +2815,7 @@ mod tests {
             language: "cuda".to_string(),
             min_standard: Some("c++17".to_string()),
             constraint: None,
+            target: None,
         };
 
         let eval = evaluate_constraint(&constraint, &machine, None);

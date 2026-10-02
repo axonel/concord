@@ -1665,6 +1665,7 @@ find_program(YACC_EXECUTABLE NAMES byacc yacc REQUIRED)
                 concord_core::Confidence::Confirmed,
                 "bison 3.8.2",
             ),
+            target_triple: None,
         },
         concord_core::ir::ToolObservation {
             name: "byacc".to_string(),
@@ -1680,6 +1681,7 @@ find_program(YACC_EXECUTABLE NAMES byacc yacc REQUIRED)
                 concord_core::Confidence::Confirmed,
                 "byacc 20210802",
             ),
+            target_triple: None,
         },
     ];
 
@@ -1814,6 +1816,7 @@ fn test_universal_build_system_generation_and_bootstrap_preconditions() {
                 concord_core::Confidence::Confirmed,
                 "autoreconf 2.71",
             ),
+            target_triple: None,
         });
 
     let evals_gen = concord_constraints::evaluator::evaluate_project(&manifest, &machine_with_gen);
@@ -1946,6 +1949,7 @@ fn test_anonymous_build_system_generation_fixture() {
                 concord_core::Confidence::Confirmed,
                 "generator_a 1.0.0",
             ),
+            target_triple: None,
         });
 
     let evals_gen = concord_constraints::evaluator::evaluate_project(&manifest, &machine_with_gen);

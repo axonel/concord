@@ -21,6 +21,48 @@ pub fn classify_tool_kind(name: &str) -> ToolKind {
     ToolKind::classify(name)
 }
 
+/// Probes the target triple of a compiler binary (e.g. "x86_64-pc-linux-gnu", "aarch64-linux-gnu").
+pub fn probe_compiler_target(exe_path: &Path, name: &str) -> Option<String> {
+    let lower = name.to_lowercase();
+    let is_compiler = lower == "gcc"
+        || lower == "g++"
+        || lower == "clang"
+        || lower == "clang++"
+        || lower == "cc"
+        || lower == "c++"
+        || lower == "gfortran"
+        || lower == "flang"
+        || lower.ends_with("-gcc")
+        || lower.ends_with("-g++")
+        || lower.ends_with("-clang")
+        || lower.ends_with("-clang++");
+
+    if !is_compiler {
+        return None;
+    }
+
+    // Try executing with -dumpmachine
+    if let Ok(output) = Command::new(exe_path).arg("-dumpmachine").output() {
+        if output.status.success() {
+            let out_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !out_str.is_empty() {
+                return Some(out_str);
+            }
+        }
+    }
+
+    // Fallback: extract target triple from binary prefix if present (e.g. aarch64-linux-gnu-gcc)
+    for suffix in ["-gcc", "-g++", "-clang", "-clang++"] {
+        if let Some(prefix) = lower.strip_suffix(suffix) {
+            if prefix.contains('-') {
+                return Some(prefix.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 /// Probe a specific tool by binary name in search directories, inspecting its version if present.
 pub fn probe_tool(
     name: &str,
@@ -77,6 +119,7 @@ pub fn probe_tool(
     };
 
     let kind = classify_tool_kind(name);
+    let target_triple = probe_compiler_target(&executable_path, name);
     let evidence = Evidence::new(
         EvidenceSource::ExecutableInspection {
             path: executable_path.clone(),
@@ -98,6 +141,7 @@ pub fn probe_tool(
         version: ver,
         executable_path,
         evidence,
+        target_triple,
     })
 }
 
@@ -187,12 +231,15 @@ pub fn scan_tools(
                                             ),
                                         );
 
+                                        let target_triple =
+                                            probe_compiler_target(&exe_path, tool_name);
                                         observations.push(ToolObservation {
                                             name: tool_name.clone(),
                                             kind,
                                             version: ver,
                                             executable_path: exe_path,
                                             evidence,
+                                            target_triple,
                                         });
                                         break;
                                     }

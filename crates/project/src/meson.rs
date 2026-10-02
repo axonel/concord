@@ -770,6 +770,7 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
                     language: "c".to_string(),
                     min_standard: c_std,
                     constraint: None,
+                    target: None,
                 },
                 ev.clone(),
             ));
@@ -793,6 +794,7 @@ pub fn analyze_meson(root: &Path) -> MesonDiscovery {
                     language: "cpp".to_string(),
                     min_standard: None,
                     constraint: None,
+                    target: None,
                 },
                 ev.clone(),
             ));

@@ -85,6 +85,7 @@ fn test_1_x86_64_only_requirement_on_x86_64() {
             "1.0.0",
             "observed testlib",
         ),
+        target_triple: None,
     });
     // SystemLibrary uses search, so test with ToolAvailable to verify satisfied path
     let tool_req = ProjectRequirement::new(
@@ -321,6 +322,7 @@ fn test_6_anyof_containing_architecture_scoped_alternatives() {
             "1.0.0",
             "observed provider_a",
         ),
+        target_triple: None,
     });
     let evals_x86_sat = evaluate_all(std::slice::from_ref(&anyof_req), &machine_x86_with_a);
     assert!(
@@ -358,6 +360,7 @@ fn test_6_anyof_containing_architecture_scoped_alternatives() {
             "1.0.0",
             "observed provider_b",
         ),
+        target_triple: None,
     });
     let evals_arm_sat = evaluate_all(&[anyof_req], &machine_arm_with_b);
     assert!(

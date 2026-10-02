@@ -778,10 +778,15 @@ impl EnvironmentGraph {
                 language,
                 min_standard,
                 constraint,
+                target,
             } => {
                 let actual = machine_state
                     .as_deref()
                     .unwrap_or("compiler missing or incompatible");
+                let target_str = target
+                    .as_ref()
+                    .map(|t| format!(" targeting '{}'", t))
+                    .unwrap_or_default();
                 let std_str = min_standard
                     .as_ref()
                     .map(|s| format!(" standard {}", s))
@@ -791,11 +796,11 @@ impl EnvironmentGraph {
                     .map(|c| format!(" version {}", c))
                     .unwrap_or_default();
                 (
-                    format!("{}.compiler{}{}", language, std_str, ver_str),
+                    format!("{}.compiler{}{}{}", language, target_str, std_str, ver_str),
                     vec![
                         format!(
-                            "Component '{}' requires compiler for '{}'{}{}",
-                            target_comp, language, std_str, ver_str
+                            "Component '{}' requires compiler for '{}'{}{}{}",
+                            target_comp, language, target_str, std_str, ver_str
                         ),
                         format!("Host machine state: {}", actual),
                         format!(

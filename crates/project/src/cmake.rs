@@ -1858,6 +1858,7 @@ pub fn analyze_cmake(root: &Path) -> CMakeDiscovery {
                 language: lang.clone(),
                 min_standard: std_opt,
                 constraint: None,
+                target: None,
             },
             ev.clone(),
         ));

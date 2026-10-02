@@ -785,13 +785,13 @@ mod tests {
     #[test]
     fn test_extract_interpolations() {
         let text =
-            "POSTGRES_PASSWORD: ${DB_PASSWORD} and ${IMMICH_VERSION:-release} and ${OPT:-val}";
+            "POSTGRES_PASSWORD: ${DB_PASSWORD} and ${APP_IMAGE_VERSION:-release} and ${OPT:-val}";
         let res = extract_interpolations(text);
         assert_eq!(res.len(), 3);
         assert_eq!(res[0], ("DB_PASSWORD".to_string(), None));
         assert_eq!(
             res[1],
-            ("IMMICH_VERSION".to_string(), Some("release".to_string()))
+            ("APP_IMAGE_VERSION".to_string(), Some("release".to_string()))
         );
         assert_eq!(res[2], ("OPT".to_string(), Some("val".to_string())));
     }

@@ -104,6 +104,7 @@ mod tests {
                     "GNU Make 4.4.1",
                     "make --version",
                 ),
+                target_triple: None,
             }],
             containers: vec![],
             env_vars: HashMap::new(),

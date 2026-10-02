@@ -141,10 +141,15 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                 language,
                 min_standard,
                 constraint,
+                target,
             } => {
                 let actual_state = matching_trace
                     .and_then(|t| t.machine_state.as_deref())
                     .unwrap_or("compiler missing or incompatible");
+                let tgt_clause = target
+                    .as_deref()
+                    .map(|t| format!(" targeting '{}'", t))
+                    .unwrap_or_default();
                 let std_clause = min_standard
                     .as_deref()
                     .map(|s| format!(" supporting {}", s))
@@ -157,8 +162,8 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                 let chain = vec![
                     format!("Host machine state: {}", actual_state),
                     format!(
-                        "Project specification: requires {} compiler{}{}",
-                        language, std_clause, ver_clause
+                        "Project specification: requires {} compiler{}{}{}",
+                        language, tgt_clause, std_clause, ver_clause
                     ),
                     format!(
                         "Violated invariant: compiler.{}.available == true",
@@ -171,7 +176,10 @@ pub fn diagnose_all(predictions: &[Prediction], traces: &[CausalTrace]) -> Vec<D
                 ];
 
                 (
-                    format!("compiler.{}{}{}", language, std_clause, ver_clause),
+                    format!(
+                        "compiler.{}{}{}{}",
+                        language, tgt_clause, std_clause, ver_clause
+                    ),
                     chain,
                 )
             }

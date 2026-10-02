@@ -21,6 +21,7 @@ pub enum PredictionCategory {
     ContainerStopped,
     ContainerUnhealthy,
     CompilerMissing,
+    CompilerTargetUnsupported,
     LanguagePackageMissing,
     SystemLibraryMissing,
     SystemLibraryIncompatible,
@@ -212,7 +213,12 @@ pub fn predict_failures(
                     language,
                     min_standard,
                     constraint,
+                    target,
                 } => {
+                    let target_str = target
+                        .as_deref()
+                        .map(|t| format!(" targeting '{}'", t))
+                        .unwrap_or_default();
                     let std_str = min_standard
                         .as_deref()
                         .map(|s| format!(" standard {}", s))
@@ -221,16 +227,41 @@ pub fn predict_failures(
                         .as_ref()
                         .map(|c| format!(" version {}", c))
                         .unwrap_or_default();
+
+                    let is_target_issue = target.is_some()
+                        && (reason.contains("target")
+                            || root_cause_hint.contains("compiler_target_missing"));
+
+                    let (title, category) = if is_target_issue {
+                        (
+                            format!(
+                                "{} compiler missing support for target '{}'",
+                                language,
+                                target.as_deref().unwrap_or("unknown")
+                            ),
+                            PredictionCategory::CompilerTargetUnsupported,
+                        )
+                    } else {
+                        (
+                            format!("{} compiler missing or incompatible", language),
+                            PredictionCategory::CompilerMissing,
+                        )
+                    };
+
                     predictions.push(Prediction {
-                        title: format!("{} compiler missing or incompatible", language),
-                        category: PredictionCategory::CompilerMissing,
+                        title,
+                        category,
                         summary: format!(
-                            "Project requires compiler for '{}{}{}', but {}. Compilation is predicted to fail.",
-                            language, std_str, ver_str, reason
+                            "Project requires compiler for '{}{}{}{}', but {}. Compilation is predicted to fail.",
+                            language, target_str, std_str, ver_str, reason
                         ),
                         confidence: Confidence::High,
                         constraint: eval.constraint.clone(),
-                        affected_components: vec![language.clone(), "compiler".to_string(), "build".to_string()],
+                        affected_components: vec![
+                            language.clone(),
+                            "compiler".to_string(),
+                            "build".to_string(),
+                        ],
                         project_evidence: eval.project_evidence.clone(),
                         machine_evidence: eval.machine_evidence.clone(),
                     });

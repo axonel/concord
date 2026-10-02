@@ -313,10 +313,12 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                         language,
                         min_standard: s1,
                         constraint: c1,
+                        target: t1,
                     },
                     RequirementKind::Compiler {
                         min_standard: s2,
                         constraint: c2,
+                        target: t2,
                         ..
                     },
                 ) => {
@@ -339,10 +341,12 @@ pub fn consolidate_requirements(requirements: Vec<ProjectRequirement>) -> Vec<Pr
                         (Some(v), None) | (None, Some(v)) => Some(v.clone()),
                         (None, None) => None,
                     };
+                    let merged_target = t1.clone().or_else(|| t2.clone());
                     existing.kind = RequirementKind::Compiler {
                         language: language.clone(),
                         min_standard: merged_standard,
                         constraint: merged_constraint,
+                        target: merged_target,
                     };
                     existing.additional_evidence.push(req.evidence);
                     existing.additional_evidence.extend(req.additional_evidence);
@@ -894,7 +898,7 @@ dependencies = ["fastapi>=0.110.0"]
     fn test_consolidate_multi_source_package_manager() {
         let dir = tempdir().unwrap();
         let pkg_json = r#"{
-            "name": "immich-like-app",
+            "name": "sample-app",
             "packageManager": "pnpm@11.24.0",
             "engines": {
                 "pnpm": ">=10.0.0"
