@@ -1,5 +1,5 @@
 use concord_constraints::evaluator::evaluate_all;
-use concord_constraints::model::ConstraintStatus;
+use concord_constraints::model::{Constraint, ConstraintStatus};
 use concord_core::arch::{match_architecture, ArchitectureMatch};
 use concord_core::evidence::Evidence;
 use concord_core::ir::{
@@ -498,5 +498,218 @@ fn test_9_graph_and_diagnosis_retains_architecture_applicability() {
         diagnosis_mentions_arch,
         "Diagnosis causal chain must retain architecture condition: {:?}",
         diagnoses[0].causal_chain
+    );
+}
+
+// -------------------------------------------------------------------------
+// Deepened Build-System Architecture Guard Extraction & Evaluation Tests
+// -------------------------------------------------------------------------
+
+#[test]
+fn test_arch_guard_1_cmake_x86_64_condition() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmake = r#"
+cmake_minimum_required(VERSION 3.14)
+project(test_guard_x86 C)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    find_package(special_x86_pkg REQUIRED)
+endif()
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmake).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze cmake");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "special_x86_pkg")
+        .expect("special_x86_pkg requirement");
+    assert_eq!(req.arch.as_deref(), Some("x86_64"));
+}
+
+#[test]
+fn test_arch_guard_2_cmake_aarch64_condition() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmake = r#"
+cmake_minimum_required(VERSION 3.14)
+project(test_guard_arm C)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    find_package(special_arm_pkg REQUIRED)
+endif()
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmake).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze cmake");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "special_arm_pkg")
+        .expect("special_arm_pkg requirement");
+    assert_eq!(req.arch.as_deref(), Some("aarch64"));
+}
+
+#[test]
+fn test_arch_guard_3_meson_x86_64_condition() {
+    let dir = tempfile::tempdir().unwrap();
+    let meson = r#"
+project('test_guard_meson_x86', 'c')
+if host_machine.cpu_family() == 'x86_64'
+    dependency('special_x86_meson_dep')
+endif
+"#;
+    std::fs::write(dir.path().join("meson.build"), meson).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze meson");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "special_x86_meson_dep")
+        .expect("special_x86_meson_dep requirement");
+    assert_eq!(req.arch.as_deref(), Some("x86_64"));
+}
+
+#[test]
+fn test_arch_guard_4_meson_aarch64_condition() {
+    let dir = tempfile::tempdir().unwrap();
+    let meson = r#"
+project('test_guard_meson_arm', 'c')
+if host_machine.cpu_family() == 'aarch64'
+    dependency('special_arm_meson_dep')
+endif
+"#;
+    std::fs::write(dir.path().join("meson.build"), meson).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze meson");
+    let req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "special_arm_meson_dep")
+        .expect("special_arm_meson_dep requirement");
+    assert_eq!(req.arch.as_deref(), Some("aarch64"));
+}
+
+#[test]
+fn test_arch_guard_5_architecture_mismatch_produces_no_failure() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmake = r#"
+cmake_minimum_required(VERSION 3.14)
+project(test_mismatch C)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    find_package(unobtainable_arm_pkg REQUIRED)
+endif()
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmake).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze cmake");
+    let machine = make_test_machine("x86_64");
+
+    let evals = evaluate_all(&manifest.requirements, &machine);
+    let arm_eval = evals
+        .iter()
+        .find(|e| {
+            if let Constraint::EnvironmentGuarded { arch, .. } = &e.constraint {
+                arch.as_deref() == Some("aarch64")
+            } else {
+                false
+            }
+        })
+        .expect("arm guarded constraint");
+
+    assert!(
+        matches!(arm_eval.status, ConstraintStatus::NotApplicable { .. }),
+        "ARM requirement on x86_64 must be NotApplicable"
+    );
+
+    let model = EnvironmentModel::new(manifest, machine);
+    let preds = predict_failures(&model, &evals);
+    assert!(
+        !preds
+            .iter()
+            .any(|p| p.summary.contains("unobtainable_arm_pkg")),
+        "Architecture mismatch must produce zero failure predictions for the mismatched requirement"
+    );
+}
+
+#[test]
+fn test_arch_guard_6_architecture_match_activates_dependency() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmake = r#"
+cmake_minimum_required(VERSION 3.14)
+project(test_match C)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    find_package(missing_x86_pkg REQUIRED)
+endif()
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmake).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze cmake");
+    // Empty machine capability on x86_64
+    let machine = make_test_machine("x86_64");
+
+    let evals = evaluate_all(&manifest.requirements, &machine);
+    let x86_eval = evals
+        .iter()
+        .find(|e| {
+            if let Constraint::EnvironmentGuarded { arch, .. } = &e.constraint {
+                arch.as_deref() == Some("x86_64")
+            } else {
+                false
+            }
+        })
+        .expect("x86 guarded constraint");
+
+    assert!(
+        x86_eval.is_violated(),
+        "Matching x86_64 requirement must be activated and evaluated as Violated when missing"
+    );
+
+    let model = EnvironmentModel::new(manifest, machine);
+    let preds = predict_failures(&model, &evals);
+    assert!(
+        preds.iter().any(|p| p.summary.contains("missing_x86_pkg")),
+        "Matching architecture must predict failure for missing requirement"
+    );
+}
+
+#[test]
+fn test_arch_guard_7_unresolved_dynamic_architecture_remains_uncertain() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmake = r#"
+cmake_minimum_required(VERSION 3.14)
+project(test_dynamic C)
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL DYNAMIC_TARGET_ARCH)
+    find_package(dynamic_pkg REQUIRED)
+endif()
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmake).unwrap();
+
+    let manifest = concord_project::analyze_project(dir.path()).expect("analyze cmake");
+    let machine = make_test_machine("x86_64");
+
+    let evals = evaluate_all(&manifest.requirements, &machine);
+    let dyn_eval = evals
+        .iter()
+        .find(|e| {
+            if let Constraint::EnvironmentGuarded { arch, .. } = &e.constraint {
+                arch.as_ref()
+                    .map(|a| a.contains("DYNAMIC"))
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        })
+        .expect("dynamic guarded constraint");
+
+    assert!(
+        dyn_eval.is_unknown(),
+        "Dynamic unresolved architecture condition must evaluate to Unknown status"
+    );
+    assert!(!dyn_eval.is_violated());
+    assert!(!dyn_eval.is_satisfied());
+
+    let model = EnvironmentModel::new(manifest, machine);
+    let preds = predict_failures(&model, &evals);
+    assert!(
+        !preds.iter().any(|p| p.summary.contains("dynamic_pkg")),
+        "Unresolved architecture condition must preserve uncertainty and produce 0 failure predictions"
     );
 }

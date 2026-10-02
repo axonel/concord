@@ -224,6 +224,82 @@ fn parse_required_arg_with_options(
     (None, None)
 }
 
+#[derive(Debug, Clone)]
+struct MesonConditionScope {
+    platform: Option<String>,
+    arch: Option<String>,
+}
+
+fn eval_meson_condition(code: &str) -> (Option<String>, Option<String>) {
+    let mut platform = None;
+    if code.contains("host_machine.system() == 'windows'")
+        || code.contains("host_machine.system() == \"windows\"")
+        || code.contains("is_windows")
+    {
+        platform = Some("windows".to_string());
+    } else if code.contains("host_machine.system() == 'darwin'")
+        || code.contains("host_machine.system() == \"darwin\"")
+        || code.contains("is_darwin")
+    {
+        platform = Some("darwin".to_string());
+    } else if code.contains("host_machine.system() == 'linux'")
+        || code.contains("host_machine.system() == \"linux\"")
+        || code.contains("is_linux")
+    {
+        platform = Some("linux".to_string());
+    }
+
+    let mut arch = None;
+    let is_arch_cond = code.contains("cpu_family()")
+        || code.contains("target_machine.cpu_family()")
+        || code.contains("host_machine.cpu_family()")
+        || code.contains("build_machine.cpu_family()")
+        || code.contains("cpu()")
+        || code.contains("target_machine.cpu()")
+        || code.contains("host_machine.cpu()");
+
+    if is_arch_cond {
+        // If negated (!= or not), do not declare positive architecture guard
+        if code.contains("!=") || code.starts_with("not ") || code.contains(" not ") {
+            return (platform, None);
+        }
+
+        if code.contains("'x86_64'")
+            || code.contains("\"x86_64\"")
+            || code.contains("'amd64'")
+            || code.contains("\"amd64\"")
+        {
+            arch = Some("x86_64".to_string());
+        } else if code.contains("'aarch64'")
+            || code.contains("\"aarch64\"")
+            || code.contains("'arm64'")
+            || code.contains("\"arm64\"")
+        {
+            arch = Some("aarch64".to_string());
+        } else if code.contains("'arm'")
+            || code.contains("\"arm\"")
+            || code.contains("'armv7'")
+            || code.contains("\"armv7\"")
+        {
+            arch = Some("armv7".to_string());
+        } else if code.contains("'riscv64'") || code.contains("\"riscv64\"") {
+            arch = Some("riscv64".to_string());
+        } else if code.contains("'ppc64'") || code.contains("\"ppc64\"") {
+            arch = Some("ppc64le".to_string());
+        } else if code.contains("'x86'") || code.contains("\"x86\"") || code.contains("'i386'") {
+            arch = Some("x86".to_string());
+        } else if code.contains("'s390x'") || code.contains("\"s390x\"") {
+            arch = Some("s390x".to_string());
+        } else {
+            // It tests cpu_family() / cpu(), but the operand is dynamic / unresolved (variable, call, etc.)
+            // Preserving uncertainty via dynamic_arch identifier
+            arch = Some("dynamic_arch".to_string());
+        }
+    }
+
+    (platform, arch)
+}
+
 struct MesonCall {
     pub name: String,
     pub call_text: String,
@@ -235,8 +311,7 @@ struct MesonCall {
 fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
     let mut calls = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
-    let mut current_platform = None;
-    let mut current_arch = None;
+    let mut condition_stack: Vec<MesonConditionScope> = Vec::new();
 
     for (line_idx, line) in lines.iter().enumerate() {
         let code = match line.split_once('#') {
@@ -248,53 +323,36 @@ fn find_meson_calls(content: &str, func_name: &str) -> Vec<MesonCall> {
         }
 
         if code.starts_with("if ") || code.contains(" if ") {
-            if code.contains("host_machine.system() == 'windows'")
-                || code.contains("host_machine.system() == \"windows\"")
-                || code.contains("is_windows")
-            {
-                current_platform = Some("windows".to_string());
-            } else if code.contains("host_machine.system() == 'darwin'")
-                || code.contains("host_machine.system() == \"darwin\"")
-                || code.contains("is_darwin")
-            {
-                current_platform = Some("darwin".to_string());
-            } else if code.contains("host_machine.system() == 'linux'")
-                || code.contains("host_machine.system() == \"linux\"")
-                || code.contains("is_linux")
-            {
-                current_platform = Some("linux".to_string());
+            let (plat, arch) = eval_meson_condition(code);
+            condition_stack.push(MesonConditionScope {
+                platform: plat,
+                arch,
+            });
+        } else if code.starts_with("elif ") || code.contains(" elif ") {
+            let (plat, arch) = eval_meson_condition(code);
+            if let Some(scope) = condition_stack.last_mut() {
+                scope.platform = plat;
+                scope.arch = arch;
+            } else {
+                condition_stack.push(MesonConditionScope {
+                    platform: plat,
+                    arch,
+                });
             }
+        } else if code == "else" || code.starts_with("else ") || code.starts_with("else:") {
+            if let Some(scope) = condition_stack.last_mut() {
+                scope.platform = None;
+                scope.arch = None;
+            }
+        } else if code == "endif" || code.starts_with("endif ") {
+            condition_stack.pop();
+        }
 
-            if code.contains("cpu_family() == 'x86_64'")
-                || code.contains("cpu_family() == \"x86_64\"")
-                || code.contains("cpu() == 'x86_64'")
-                || code.contains("cpu() == \"x86_64\"")
-            {
-                current_arch = Some("x86_64".to_string());
-            } else if code.contains("cpu_family() == 'aarch64'")
-                || code.contains("cpu_family() == \"aarch64\"")
-                || code.contains("cpu() == 'aarch64'")
-                || code.contains("cpu() == \"aarch64\"")
-            {
-                current_arch = Some("aarch64".to_string());
-            } else if code.contains("cpu_family() == 'arm'")
-                || code.contains("cpu_family() == \"arm\"")
-            {
-                current_arch = Some("armv7".to_string());
-            } else if code.contains("cpu_family() == 'riscv64'")
-                || code.contains("cpu_family() == \"riscv64\"")
-            {
-                current_arch = Some("riscv64".to_string());
-            } else if code.contains("cpu_family() == 'ppc64'")
-                || code.contains("cpu_family() == \"ppc64\"")
-            {
-                current_arch = Some("ppc64le".to_string());
-            }
-        }
-        if code == "endif" || code.starts_with("endif ") {
-            current_platform = None;
-            current_arch = None;
-        }
+        let current_platform = condition_stack
+            .iter()
+            .rev()
+            .find_map(|s| s.platform.clone());
+        let current_arch = condition_stack.iter().rev().find_map(|s| s.arch.clone());
 
         let pattern = format!("{}(", func_name);
         let pattern_space = format!("{} (", func_name);
@@ -1049,5 +1107,34 @@ pkgconf = find_program('pkg-config', 'pkgconf', required: false)
             }
             _ => panic!("Expected AnyOf for byacc_executable"),
         }
+    }
+
+    #[test]
+    fn test_meson_arch_guards() {
+        let dir = tempdir().unwrap();
+        let content = r#"
+project('arch_app', 'c', meson_version: '>= 0.54.0')
+if host_machine.cpu_family() == 'x86_64'
+    dep_x86 = dependency('special_x86_lib')
+elif host_machine.cpu_family() == 'aarch64'
+    dep_arm = dependency('special_arm_lib')
+endif
+"#;
+        fs::write(dir.path().join("meson.build"), content).unwrap();
+
+        let disc = analyze_meson(dir.path());
+        let x86_lib = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "special_x86_lib")
+            .expect("special_x86_lib requirement");
+        assert_eq!(x86_lib.arch.as_deref(), Some("x86_64"));
+
+        let arm_lib = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "special_arm_lib")
+            .expect("special_arm_lib requirement");
+        assert_eq!(arm_lib.arch.as_deref(), Some("aarch64"));
     }
 }

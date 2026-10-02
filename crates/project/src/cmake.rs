@@ -287,6 +287,114 @@ pub fn parse_cmake_commands(
     commands
 }
 
+/// Extracts architecture guard from condition tokens if deterministically present.
+pub(crate) fn extract_cmake_arch(tokens: &[String]) -> Option<String> {
+    if tokens.is_empty() {
+        return None;
+    }
+
+    // Check if the condition starts with a top-level NOT
+    if tokens
+        .first()
+        .map(|t| t.eq_ignore_ascii_case("NOT"))
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let joined = tokens.join(" ").to_uppercase();
+
+    // 1. Look for explicit CMAKE_SYSTEM_PROCESSOR, CMAKE_HOST_SYSTEM_PROCESSOR, or TARGET_ARCH
+    if let Some(pos) = tokens.iter().position(|t| {
+        let up = t.to_uppercase();
+        up == "CMAKE_SYSTEM_PROCESSOR"
+            || up == "CMAKE_HOST_SYSTEM_PROCESSOR"
+            || up == "CMAKE_TARGET_PROCESSOR"
+            || up == "CMAKE_SYSTEM_ARCH"
+            || up == "TARGET_ARCH"
+    }) {
+        // If immediately preceded by NOT, it is inverted
+        if pos > 0 && tokens[pos - 1].eq_ignore_ascii_case("NOT") {
+            return None;
+        }
+
+        if pos + 1 < tokens.len() {
+            let op = tokens[pos + 1].to_uppercase();
+            if (op == "STREQUAL" || op == "EQUAL" || op == "MATCHES") && pos + 2 < tokens.len() {
+                let val = tokens[pos + 2].trim_matches('"').trim_matches('\'').trim();
+                let val_upper = val.to_uppercase();
+
+                if val_upper.contains("X86_64")
+                    || val_upper.contains("AMD64")
+                    || val_upper.contains("X64")
+                {
+                    return Some("x86_64".to_string());
+                } else if val_upper.contains("AARCH64") || val_upper.contains("ARM64") {
+                    return Some("aarch64".to_string());
+                } else if val_upper.contains("ARMV7")
+                    || val_upper.contains("ARMHF")
+                    || val_upper.contains("ARM.*")
+                {
+                    return Some("armv7".to_string());
+                } else if val_upper.contains("RISCV64") {
+                    return Some("riscv64".to_string());
+                } else if val_upper.contains("PPC64LE") || val_upper.contains("PPC64EL") {
+                    return Some("ppc64le".to_string());
+                } else if val_upper == "X86" || val_upper == "I386" || val_upper == "I686" {
+                    return Some("x86".to_string());
+                } else if val_upper == "S390X" {
+                    return Some("s390x".to_string());
+                } else {
+                    // It is an explicit architecture condition, but the compared value
+                    // is dynamic/unresolved (e.g. a variable or unrecognized expression).
+                    // Returning a dynamic/unknown identifier ensures Concord preserves
+                    // uncertainty via EnvironmentApplicability::Unknown.
+                    return Some(format!("dynamic:{}", val));
+                }
+            } else if op == "IN_LIST" && pos + 2 < tokens.len() {
+                let list_name = &tokens[pos + 2];
+                let list_upper = list_name.to_uppercase();
+                if list_upper.contains("X86_64") || list_upper.contains("AMD64") {
+                    return Some("x86_64".to_string());
+                } else if list_upper.contains("AARCH64") || list_upper.contains("ARM64") {
+                    return Some("aarch64".to_string());
+                } else {
+                    return Some(format!("dynamic:{}", list_name));
+                }
+            }
+        }
+    }
+
+    // 2. Direct architecture keyword checks in the condition
+    if (joined.contains("X86_64") || joined.contains("AMD64") || joined.contains("X64"))
+        && !joined.contains("NOT X86_64")
+        && !joined.contains("NOT AMD64")
+    {
+        Some("x86_64".to_string())
+    } else if (joined.contains("AARCH64") || joined.contains("ARM64"))
+        && !joined.contains("NOT AARCH64")
+        && !joined.contains("NOT ARM64")
+    {
+        Some("aarch64".to_string())
+    } else if (joined.contains("ARMV7") || joined.contains("ARMHF"))
+        && !joined.contains("NOT ARMV7")
+    {
+        Some("armv7".to_string())
+    } else if joined.contains("RISCV64") && !joined.contains("NOT RISCV64") {
+        Some("riscv64".to_string())
+    } else if (joined.contains("PPC64LE") || joined.contains("PPC64EL"))
+        && !joined.contains("NOT PPC64LE")
+    {
+        Some("ppc64le".to_string())
+    } else if (joined.contains("STREQUAL \"X86\"") || joined.contains("STREQUAL X86"))
+        && !joined.contains("NOT")
+    {
+        Some("x86".to_string())
+    } else {
+        None
+    }
+}
+
 /// Evaluates condition tokens for platform and architecture guards and optionality based on option defaults.
 fn eval_condition(
     tokens: &[String],
@@ -313,28 +421,7 @@ fn eval_condition(
         platform = Some("android".to_string());
     }
 
-    let mut arch = None;
-    if (joined.contains("X86_64") || joined.contains("AMD64") || joined.contains("X64"))
-        && !joined.contains("NOT X86_64")
-        && !joined.contains("NOT AMD64")
-    {
-        arch = Some("x86_64".to_string());
-    } else if (joined.contains("AARCH64") || joined.contains("ARM64"))
-        && !joined.contains("NOT AARCH64")
-        && !joined.contains("NOT ARM64")
-    {
-        arch = Some("aarch64".to_string());
-    } else if (joined.contains("ARMV7") || joined.contains("ARMHF"))
-        && !joined.contains("NOT ARMV7")
-    {
-        arch = Some("armv7".to_string());
-    } else if joined.contains("RISCV64") && !joined.contains("NOT RISCV64") {
-        arch = Some("riscv64".to_string());
-    } else if (joined.contains("PPC64LE") || joined.contains("PPC64EL"))
-        && !joined.contains("NOT PPC64LE")
-    {
-        arch = Some("ppc64le".to_string());
-    }
+    let arch = extract_cmake_arch(tokens);
 
     let mut is_optional = false;
     for token in tokens {
@@ -576,18 +663,7 @@ pub fn extract_fallback_chains(
                             branch_plat = Some("darwin".to_string());
                         }
 
-                        let mut branch_arch = None;
-                        if (joined_cond.contains("X86_64") || joined_cond.contains("AMD64"))
-                            && !joined_cond.contains("NOT X86_64")
-                            && !joined_cond.contains("NOT AMD64")
-                        {
-                            branch_arch = Some("x86_64".to_string());
-                        } else if (joined_cond.contains("AARCH64") || joined_cond.contains("ARM64"))
-                            && !joined_cond.contains("NOT AARCH64")
-                            && !joined_cond.contains("NOT ARM64")
-                        {
-                            branch_arch = Some("aarch64".to_string());
-                        }
+                        let branch_arch = extract_cmake_arch(cond_tokens);
 
                         let mut branch_has_found = false;
                         // Check for *_FOUND in condition tokens
@@ -2337,11 +2413,14 @@ find_package(FLEX REQUIRED)
         let cmake_content = r#"
 cmake_minimum_required(VERSION 3.10)
 project(arch_sample C)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     find_package(IntelIPP REQUIRED)
 endif()
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
     find_package(ArmCompute REQUIRED)
+endif()
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL DYNAMIC_TARGET_ARCH)
+    find_package(DynamicPkg REQUIRED)
 endif()
 "#;
         fs::write(dir.path().join("CMakeLists.txt"), cmake_content).unwrap();
@@ -2360,5 +2439,12 @@ endif()
             .find(|r| r.name == "armcompute")
             .expect("armcompute missing");
         assert_eq!(arm.arch.as_deref(), Some("aarch64"));
+
+        let dyn_pkg = disc
+            .requirements
+            .iter()
+            .find(|r| r.name == "dynamicpkg")
+            .expect("dynamicpkg missing");
+        assert_eq!(dyn_pkg.arch.as_deref(), Some("dynamic:DYNAMIC_TARGET_ARCH"));
     }
 }
