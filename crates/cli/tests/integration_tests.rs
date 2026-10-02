@@ -2211,3 +2211,101 @@ fn test_autotools_case_6_all_anyof_providers_missing_failure() {
         .expect("CapabilityUnsatisfied failure prediction");
     assert!(pred.summary.contains("test_sym_library"));
 }
+
+#[test]
+fn test_system_library_threads_aliasing_and_posix_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    let cmakelists = r#"
+cmake_minimum_required(VERSION 3.14)
+project(test_threads CXX)
+find_package(Threads REQUIRED)
+add_executable(test_threads main.cpp)
+target_link_libraries(test_threads PRIVATE Threads::Threads)
+"#;
+    std::fs::write(dir.path().join("CMakeLists.txt"), cmakelists).unwrap();
+    std::fs::write(dir.path().join("main.cpp"), "int main() { return 0; }").unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze cmake project");
+    let threads_req = manifest
+        .requirements
+        .iter()
+        .find(|r| r.name == "threads" || r.name == "Threads");
+    assert!(
+        threads_req.is_some(),
+        "Threads requirement should be extracted"
+    );
+
+    let machine = scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+
+    let threads_eval = evals
+        .iter()
+        .find(|e| match &e.constraint {
+            concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } => {
+                name == "threads" || name == "Threads"
+            }
+            _ => false,
+        })
+        .expect("threads constraint evaluation");
+
+    assert_eq!(
+        threads_eval.status,
+        concord_constraints::model::ConstraintStatus::Satisfied,
+        "threads constraint should be satisfied on standard Linux machine with pthread"
+    );
+
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
+    let threads_pred = preds.iter().find(|p| {
+        p.summary.to_lowercase().contains("threads")
+            || p.title.to_lowercase().contains("threads")
+            || p.affected_components
+                .iter()
+                .any(|d| d.to_lowercase().contains("threads"))
+    });
+    assert!(
+        threads_pred.is_none(),
+        "Should not produce false positive failure prediction for threads"
+    );
+}
+
+#[test]
+fn test_system_library_atomics_aliasing_and_capability() {
+    let dir = tempfile::tempdir().unwrap();
+    let meson_build = r#"
+project('test_atomics', 'cpp', version : '1.0.0')
+cpp = meson.get_compiler('cpp')
+atomic_dep = dependency('atomic', required : false)
+"#;
+    std::fs::write(dir.path().join("meson.build"), meson_build).unwrap();
+
+    let manifest = analyze_project(dir.path()).expect("analyze meson project");
+    let machine = scan_machine();
+    let evals = concord_constraints::evaluator::evaluate_project(&manifest, &machine);
+
+    // If an atomics constraint was generated, verify it is satisfied and does not predict failure
+    for eval in &evals {
+        if let concord_constraints::model::Constraint::SystemLibraryAvailable { name, .. } =
+            &eval.constraint
+        {
+            if name == "atomic" || name == "atomics" {
+                assert_eq!(
+                    eval.status,
+                    concord_constraints::model::ConstraintStatus::Satisfied
+                );
+            }
+        }
+    }
+
+    let model = concord_core::ir::EnvironmentModel::new(manifest, machine);
+    let preds = concord_predictor::predict_failures(&model, &evals);
+    let atomics_pred = preds.iter().find(|p| {
+        (p.summary.to_lowercase().contains("atomic") || p.title.to_lowercase().contains("atomic"))
+            && (p.category == concord_predictor::PredictionCategory::SystemLibraryMissing
+                || p.category == concord_predictor::PredictionCategory::CapabilityUnsatisfied)
+    });
+    assert!(
+        atomics_pred.is_none(),
+        "Should not produce false positive failure prediction for atomics"
+    );
+}

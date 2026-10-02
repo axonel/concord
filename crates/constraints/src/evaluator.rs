@@ -142,6 +142,35 @@ pub fn requirement_to_constraint(req: &ProjectRequirement) -> Option<Constraint>
     }
 }
 
+/// Canonical aliases and standard provider names for system library capabilities
+/// across build systems (e.g., CMake find_package, Meson dependency, POSIX standards).
+fn canonical_system_library_names(name: &str) -> Vec<String> {
+    let lower = name.to_lowercase();
+    let mut names = vec![name.to_string()];
+    match lower.as_str() {
+        "threads" | "pthreads" => {
+            names.push("pthread".to_string());
+            names.push("pthreads".to_string());
+            names.push("threads".to_string());
+        }
+        "atomics" => {
+            names.push("atomic".to_string());
+        }
+        "atomic" => {
+            names.push("atomics".to_string());
+        }
+        "math" => {
+            names.push("m".to_string());
+        }
+        "m" => {
+            names.push("math".to_string());
+        }
+        _ => {}
+    }
+    names.dedup();
+    names
+}
+
 fn compiler_supports_standard(
     compiler_name: &str,
     lang: &str,
@@ -1185,12 +1214,20 @@ pub fn evaluate_constraint(
                 let mut found_evidence = None;
                 let mut found_version = None;
 
+                let canonical_names = canonical_system_library_names(name);
+
                 // 1. Check pkg-config metadata
-                let pkg_names = if let Some(stripped) = name.strip_prefix("lib") {
-                    vec![name.clone(), stripped.to_string()]
-                } else {
-                    vec![name.clone(), format!("lib{}", name)]
-                };
+                let mut pkg_names = Vec::new();
+                for c_name in &canonical_names {
+                    if let Some(stripped) = c_name.strip_prefix("lib") {
+                        pkg_names.push(c_name.clone());
+                        pkg_names.push(stripped.to_string());
+                    } else {
+                        pkg_names.push(c_name.clone());
+                        pkg_names.push(format!("lib{}", c_name));
+                    }
+                }
+                pkg_names.dedup();
 
                 let pkg_config_path = machine
                     .env_vars
@@ -1290,14 +1327,17 @@ pub fn evaluate_constraint(
                     }
 
                     let mut patterns = Vec::new();
-                    if name.starts_with("lib") {
-                        patterns.push(format!("{}.so", name));
-                        patterns.push(format!("{}.a", name));
-                    } else {
-                        patterns.push(format!("lib{}.so", name));
-                        patterns.push(format!("lib{}.a", name));
-                        patterns.push(format!("{}.so", name));
+                    for c_name in &canonical_names {
+                        if c_name.starts_with("lib") {
+                            patterns.push(format!("{}.so", c_name));
+                            patterns.push(format!("{}.a", c_name));
+                        } else {
+                            patterns.push(format!("lib{}.so", c_name));
+                            patterns.push(format!("lib{}.a", c_name));
+                            patterns.push(format!("{}.so", c_name));
+                        }
                     }
+                    patterns.dedup();
 
                     for dir in &lib_dirs {
                         for pat in &patterns {
@@ -1319,6 +1359,144 @@ pub fn evaluate_constraint(
                         }
                         if found_evidence.is_some() {
                             break;
+                        }
+                    }
+                }
+
+                // 2.5 Standard system capability fallback (threads, atomics, math, dl, rt)
+                if found_evidence.is_none() {
+                    let is_threads = canonical_names
+                        .iter()
+                        .any(|n| n == "threads" || n == "pthread" || n == "pthreads");
+                    let is_atomics = canonical_names
+                        .iter()
+                        .any(|n| n == "atomics" || n == "atomic");
+                    let is_dl = canonical_names.iter().any(|n| n == "dl");
+                    let is_rt = canonical_names.iter().any(|n| n == "rt");
+                    let is_math = canonical_names.iter().any(|n| n == "m" || n == "math");
+
+                    if is_threads && machine.os_family == "windows" {
+                        found_evidence = Some(Evidence::new(
+                            EvidenceSource::DirectObservation {
+                                detail: "Windows native threading capability available".to_string(),
+                            },
+                            Confidence::High,
+                            "Windows native threading capability available",
+                        ));
+                    } else if is_threads {
+                        for default_dir in [
+                            "/usr/include",
+                            "/usr/local/include",
+                            "/usr/include/x86_64-linux-gnu",
+                            "/usr/include/aarch64-linux-gnu",
+                        ] {
+                            let p = Path::new(default_dir).join("pthread.h");
+                            if p.exists() {
+                                let detail = format!(
+                                    "POSIX threads capability available via '{}'",
+                                    p.display()
+                                );
+                                found_evidence = Some(Evidence::new(
+                                    EvidenceSource::DirectObservation {
+                                        detail: detail.clone(),
+                                    },
+                                    Confidence::High,
+                                    detail,
+                                ));
+                                break;
+                            }
+                        }
+                    } else if is_atomics {
+                        for default_dir in [
+                            "/usr/include",
+                            "/usr/local/include",
+                            "/usr/include/x86_64-linux-gnu",
+                            "/usr/include/aarch64-linux-gnu",
+                        ] {
+                            let p = Path::new(default_dir).join("stdatomic.h");
+                            if p.exists() {
+                                let detail = format!(
+                                    "C/C++ atomics capability available via '{}'",
+                                    p.display()
+                                );
+                                found_evidence = Some(Evidence::new(
+                                    EvidenceSource::DirectObservation {
+                                        detail: detail.clone(),
+                                    },
+                                    Confidence::High,
+                                    detail,
+                                ));
+                                break;
+                            }
+                        }
+                    } else if is_dl {
+                        for default_dir in [
+                            "/usr/include",
+                            "/usr/local/include",
+                            "/usr/include/x86_64-linux-gnu",
+                            "/usr/include/aarch64-linux-gnu",
+                        ] {
+                            let p = Path::new(default_dir).join("dlfcn.h");
+                            if p.exists() {
+                                let detail = format!(
+                                    "Dynamic linking capability available via '{}'",
+                                    p.display()
+                                );
+                                found_evidence = Some(Evidence::new(
+                                    EvidenceSource::DirectObservation {
+                                        detail: detail.clone(),
+                                    },
+                                    Confidence::High,
+                                    detail,
+                                ));
+                                break;
+                            }
+                        }
+                    } else if is_rt {
+                        for default_dir in [
+                            "/usr/include",
+                            "/usr/local/include",
+                            "/usr/include/x86_64-linux-gnu",
+                            "/usr/include/aarch64-linux-gnu",
+                        ] {
+                            let p = Path::new(default_dir).join("time.h");
+                            if p.exists() {
+                                let detail = format!(
+                                    "POSIX realtime clock capability available via '{}'",
+                                    p.display()
+                                );
+                                found_evidence = Some(Evidence::new(
+                                    EvidenceSource::DirectObservation {
+                                        detail: detail.clone(),
+                                    },
+                                    Confidence::High,
+                                    detail,
+                                ));
+                                break;
+                            }
+                        }
+                    } else if is_math {
+                        for default_dir in [
+                            "/usr/include",
+                            "/usr/local/include",
+                            "/usr/include/x86_64-linux-gnu",
+                            "/usr/include/aarch64-linux-gnu",
+                        ] {
+                            let p = Path::new(default_dir).join("math.h");
+                            if p.exists() {
+                                let detail = format!(
+                                    "Standard math library capability available via '{}'",
+                                    p.display()
+                                );
+                                found_evidence = Some(Evidence::new(
+                                    EvidenceSource::DirectObservation {
+                                        detail: detail.clone(),
+                                    },
+                                    Confidence::High,
+                                    detail,
+                                ));
+                                break;
+                            }
                         }
                     }
                 }
@@ -2432,6 +2610,72 @@ mod tests {
         let constraint = Constraint::ToolAvailable {
             name: "nonexistent-tool-xyz".to_string(),
             kind: ToolKind::BuildTool,
+            constraint: None,
+            scope: ToolScope::RequiredForBuild,
+        };
+
+        let eval = evaluate_constraint(&constraint, &machine, None);
+        assert!(eval.is_violated());
+    }
+
+    #[test]
+    fn test_threads_system_library_satisfied_via_posix_capability() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        // Create dummy pthread header in include dir
+        let inc_dir = temp_dir.path().join("include");
+        std::fs::create_dir_all(&inc_dir).unwrap();
+        std::fs::write(inc_dir.join("pthread.h"), "/* pthread */").unwrap();
+
+        let mut machine = MachineCapability::empty();
+        machine
+            .env_vars
+            .insert("C_INCLUDE_PATH".to_string(), inc_dir.display().to_string());
+
+        let constraint = Constraint::SystemLibraryAvailable {
+            name: "threads".to_string(),
+            header: None,
+            constraint: None,
+            scope: ToolScope::RequiredForBuild,
+        };
+
+        let eval = evaluate_constraint(&constraint, &machine, None);
+        assert_eq!(eval.status, ConstraintStatus::Satisfied);
+        let ev = eval.machine_evidence.expect("machine evidence");
+        assert!(ev.description.contains("threads") || ev.description.contains("pthread"));
+    }
+
+    #[test]
+    fn test_atomics_system_library_satisfied_via_atomic_capability() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        // Create dummy libatomic.so in lib dir
+        let lib_dir = temp_dir.path().join("lib");
+        std::fs::create_dir_all(&lib_dir).unwrap();
+        std::fs::write(lib_dir.join("libatomic.so"), "").unwrap();
+
+        let mut machine = MachineCapability::empty();
+        machine
+            .env_vars
+            .insert("LIBRARY_PATH".to_string(), lib_dir.display().to_string());
+
+        let constraint = Constraint::SystemLibraryAvailable {
+            name: "atomics".to_string(),
+            header: None,
+            constraint: None,
+            scope: ToolScope::RequiredForBuild,
+        };
+
+        let eval = evaluate_constraint(&constraint, &machine, None);
+        assert_eq!(eval.status, ConstraintStatus::Satisfied);
+        let ev = eval.machine_evidence.expect("machine evidence");
+        assert!(ev.description.contains("libatomic.so"));
+    }
+
+    #[test]
+    fn test_system_library_unknown_still_violated() {
+        let machine = MachineCapability::empty();
+        let constraint = Constraint::SystemLibraryAvailable {
+            name: "nonexistent_custom_lib_404".to_string(),
+            header: None,
             constraint: None,
             scope: ToolScope::RequiredForBuild,
         };
