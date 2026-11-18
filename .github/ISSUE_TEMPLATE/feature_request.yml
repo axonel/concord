@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a focused improvement to deterministic environment analysis.
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the concrete developer workflow or failure mode.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the smallest useful behavior change.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Example project evidence
+      description: Provide sanitized config snippets or a minimal fixture, if applicable.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Design constraints
+      options:
+        - label: The proposal preserves deterministic analysis.
+        - label: The proposal does not mutate the inspected host or project during scan/verify.
+        - label: Unknown evidence remains explicitly uncertain.

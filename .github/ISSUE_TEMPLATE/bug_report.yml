@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible CONCORD detection, prediction, diagnosis, or verification defect.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove secrets and private paths. Do not paste `.env` values, tokens, or private repository content.
+  - type: input
+    id: version
+    attributes:
+      label: CONCORD version
+      description: Output of `concord --version`.
+      placeholder: "concord 0.2.1"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Host platform
+      description: Linux distribution and CPU architecture.
+      placeholder: "Ubuntu 24.04, x86_64"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Project discovery
+        - Host scanning
+        - Constraint evaluation
+        - Failure prediction
+        - Root-cause diagnosis
+        - Read-only verification
+        - CLI / JSON output
+        - Installation / release packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Commands, relevant sanitized project files, and steps to reproduce.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Sanitized output and evidence
+      description: Include relevant terminal output. Remove secrets, usernames, and sensitive paths.
+      render: text
+    validations:
+      required: false

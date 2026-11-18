@@ -37,5 +37,8 @@ jobs:
       - name: Build Release Binary
         run: cargo build --release --verbose
 
+      - name: Validate installer shell syntax
+        run: sh -n install.sh && bash -n scripts/test-install.sh
+
       - name: Run Smoke Test on Repository
         run: ./target/release/concord .
