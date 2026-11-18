@@ -1,4 +1,21 @@
+<div align="center">
+
 # CONCORD
+
+**Know whether your development environment can build and run the project — before you waste time finding out.**
+
+Deterministic, evidence-backed environment analysis in Rust. No AI service, account, or daemon required.
+
+[Quick install](#quick-install-linux-x86_64) · [CLI tour](#30-second-tour) · [Architecture](#architecture--design) · [Contributing](CONTRIBUTING.md) · [Security](https://github.com/axonel/concord/security)
+
+[![CI](https://github.com/axonel/concord/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/axonel/concord/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/axonel/concord?display_name=tag)](https://github.com/axonel/concord/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/built_with-Rust-orange?logo=rust)](https://www.rust-lang.org/)
+
+</div>
+
+---
 
 > **Development-environment resolution engine that predicts failures before they happen, determines root causes with verifiable evidence, and proves environment invariants.**
 
@@ -31,6 +48,9 @@ curl -fsSL https://raw.githubusercontent.com/axonel/concord/main/install.sh | CO
 ---
 
 ## 30-Second Tour
+
+CONCORD is a local CLI. It inspects project declarations and observable host capabilities, evaluates explicit constraints, then reports predicted blockers with evidence and causal chains. It does not install dependencies or attempt to repair your machine.
+
 
 ### 1. Run in your project root
 
@@ -243,6 +263,11 @@ cargo build --release
 
 ## Architecture & Design
 
+CONCORD follows a deterministic pipeline: discover project requirements and host capabilities, normalize them into an environment model, evaluate constraints, trace causal dependencies, and verify the resulting requirements. The design separates observation from interpretation so a report can explain which project declaration and machine observation support a finding.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for crate responsibilities and data flow, and [docs/ENVIRONMENT_MODEL.md](docs/ENVIRONMENT_MODEL.md) for the evidence-backed model.
+
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for details on:
 - The 8-stage deterministic resolution pipeline
 - Environment IR and Evidence provenance model
@@ -251,6 +276,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details on:
 - Planned roadmap (Minimal Repair Planner, Counterfactual Simulation, Transactional Execution)
 
 ---
+
+## Project status and scope
+
+- **Current release documented here:** `v0.2.1`. Check [GitHub Releases](https://github.com/axonel/concord/releases) for the latest published version and platform assets.
+- **Host support:** the published installer and release workflow target Linux x86_64. Detection of project-declared cross-compilation targets does not imply that the host scanner or prebuilt binary supports every target platform.
+- **Execution model:** analysis and verification are deterministic and read-only; CONCORD diagnoses environment constraints but does not automatically install, configure, or repair dependencies.
+
+## Contributing
+
+Bug reports should include a minimal sanitized reproduction, CONCORD version, host distribution, and architecture. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing, and engineering invariants. Use the repository's [bug report](https://github.com/axonel/concord/issues/new?template=bug_report.yml) or [feature request](https://github.com/axonel/concord/issues/new?template=feature_request.yml) templates.
 
 ## License
 
